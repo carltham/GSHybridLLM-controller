@@ -2,7 +2,7 @@ import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import {
   generateWithOllama, planWithCopilot, requireText, runTask,
-} from "./controller.js";
+} from "../core/controller.js";
 
 const help = `GSHybridLLM controller
 

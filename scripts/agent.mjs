@@ -21,7 +21,8 @@ const allowlistFile = join(root, ".ollama", "allowlist.json");
 const logFile = join(root, "logs", "terminal-output.log");
 // The model must not be able to widen its own permissions.
 const PROTECTED = new Set([join("scripts", "agent.mjs")]);
-const PROTECTED_DIR = ".ollama";
+// dev/testing holds the tests the model must satisfy; it must not edit them.
+const PROTECTED_DIRS = [".ollama", join("dev", "testing")];
 
 mkdirSync(dirname(logFile), { recursive: true });
 writeFileSync(logFile, "");
@@ -50,7 +51,7 @@ function safePath(rel, forWrite) {
     throw new Error("Path is outside the project.");
   }
   if (rootRelative.split(sep).some(isBlocked)) throw new Error("Path is blocked (.git, node_modules, .env*).");
-  if (forWrite && (PROTECTED.has(rootRelative) || rootRelative.split(sep)[0] === PROTECTED_DIR)) {
+  if (forWrite && (PROTECTED.has(rootRelative) || PROTECTED_DIRS.some((d) => rootRelative === d || rootRelative.startsWith(d + sep)))) {
     throw new Error("Path is protected.");
   }
   return real;
@@ -72,9 +73,33 @@ function saveAllowlist(commands) {
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 
-async function approve(summary, allowAlways) {
+// Optional pre-written approvals: AGENT_ANSWERS=path, lines "write: y|n" or "run: y|n|a".
+// Read once at startup (the model cannot add answers mid-run); kept per prompt kind so a
+// write approval never approves a command; when a kind runs out, the answer is "n".
+function loadAnswers(file) {
+  const answers = { write: [], run: [] };
+  for (const raw of readFileSync(resolve(file), "utf8").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line === "" || line.startsWith("#")) continue;
+    const match = /^(write|run)\s*:\s*([yna])$/i.exec(line);
+    if (!match || (match[1].toLowerCase() === "write" && match[2].toLowerCase() === "a")) {
+      throw new Error(`Invalid answer-file line: ${line}`);
+    }
+    answers[match[1].toLowerCase()].push(match[2].toLowerCase());
+  }
+  return answers;
+}
+const scriptedAnswers = process.env.AGENT_ANSWERS ? loadAnswers(process.env.AGENT_ANSWERS) : null;
+
+async function approve(summary, allowAlways, kind) {
   const hint = allowAlways ? "[y]es once / [n]o / [a]lways: " : "[y]es / [n]o: ";
-  const answer = (await rl.question(`${summary}\n${hint}`)).trim().toLowerCase();
+  let answer;
+  if (scriptedAnswers) {
+    answer = scriptedAnswers[kind].shift() ?? "n";
+    log(`${summary}\n${hint}${answer} (answer file)`);
+  } else {
+    answer = (await rl.question(`${summary}\n${hint}`)).trim().toLowerCase();
+  }
   if (answer === "y") return "once";
   if (answer === "a" && allowAlways) return "always";
   return "no";
@@ -122,6 +147,7 @@ const tools = {
     const choice = await approve(
       `WRITE ${relative(root, real)} (${content.length} chars${exists ? ", OVERWRITES existing file" : ""})\n---\n${content.slice(0, 500)}\n---`,
       false,
+      "write",
     );
     if (choice === "no") return "Denied by user.";
     mkdirSync(dirname(real), { recursive: true });
@@ -132,7 +158,7 @@ const tools = {
     if (typeof command !== "string" || command.trim() === "" || command.length > 1000) throw new Error("Invalid command.");
     const allowed = loadAllowlist();
     if (!allowed.includes(command)) {
-      const choice = await approve(`RUN: ${command}`, true);
+      const choice = await approve(`RUN: ${command}`, true, "run");
       if (choice === "no") return "Denied by user.";
       if (choice === "always") saveAllowlist([...allowed, command]);
     }
@@ -215,7 +241,10 @@ try {
       toolUsed = true;
       result = String(await tool(call.args ?? {}));
     } catch (error) {
-      result = `Error: ${error.message}`;
+      // Small models repeat malformed calls unless told the exact shape.
+      result = `Error: ${error.message}\nYour reply was: ${reply.slice(0, 300)}\n` +
+        `Reply with exactly one JSON object such as {"tool": "run_command", "args": {"command": "npm test"}} ` +
+        `- the tool's arguments go inside "args".`;
     }
     log(`    -> ${result.slice(0, 300).replaceAll("\n", "\n       ")}`);
     messages.push({ role: "user", content: `Tool result:\n${result.slice(0, MAX_OUTPUT)}` });

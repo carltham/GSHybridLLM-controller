@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   generateWithOllama, parsePlan, runTask, supervisorSessionConfig,
   type ControllerPorts,
-} from "../src/controller.js";
+} from "../../../src/core/controller.js";
 
 const validPlan = '{"tasks":[{"instruction":"Suggest a small function."}]}';
 function ports(overrides: Partial<ControllerPorts> = {}): ControllerPorts {

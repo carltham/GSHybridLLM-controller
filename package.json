@@ -9,8 +9,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && node --test dist/test/controller.test.js",
-    "start": "node dist/src/cli.js"
+    "test": "npm run build && node --test dist/dev/testing/unit/controller.test.js",
+    "start": "node dist/src/cli/index.js"
   },
   "dependencies": {
     "@github/copilot-sdk": "1.0.28"

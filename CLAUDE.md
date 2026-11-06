@@ -24,16 +24,17 @@ It is not a merged model and is separate from GSAccount.
 ```bash
 npm ci               # install
 npm run build        # strict tsc build to dist/
-npm test             # build + node --test dist/test/controller.test.js
-npm start -- --help  # run CLI (dist/src/cli.js)
+npm test             # build + node --test dist/dev/testing/unit/controller.test.js
+npm start -- --help  # run CLI (dist/src/cli/index.js)
 npm audit
 ```
 
 ## Layout
 
-- `src/controller.ts`: approval gates, Copilot planning, Ollama calls, limits
-- `src/cli.ts`: terminal interface
-- `test/controller.test.ts`: mocked tests (no network, auth, or live inference)
+- `src/core/controller.ts`: approval gates, Copilot planning, Ollama calls, limits
+- `src/cli/index.ts`: terminal interface
+- `dev/testing/unit/controller.test.ts`: mocked tests (no network, auth, or live inference)
+- `dev/testing/specs/<name>/`: top-down TDD specs for the local agent (tests + `task.txt`)
 
 ## Local agent (`scripts/agent.mjs`)
 
@@ -81,4 +82,10 @@ model directory `/mnt/DATA/ollama_models` was empty and nothing was copied or
 deleted from it. Do not change the service without explicit go-ahead.
 
 Runtime validation's test parser does not recognize Node's test-count format; confirm
-the 9 passing tests with a direct `node --test`.
+the 9 controller tests with a direct `node --test`.
+
+Top-down TDD samples: `dev/testing/specs/<name>/` (tracked) holds the tests and `task.txt`.
+`node dev/testing/run-sample.mjs <name>` deletes `dist/testing/<name>/` (git-ignored output),
+copies the specs in and runs the local agent. The model cannot write `dev/testing/`.
+`AGENT_ANSWERS=<file>` gives pre-written approvals (`write: y`, `run: n`; missing → no).
+There is no CI; tests are run locally.
