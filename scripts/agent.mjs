@@ -22,7 +22,12 @@ const logFile = join(root, "logs", "terminal-output.log");
 // The model must not be able to widen its own permissions.
 const PROTECTED = new Set([join("scripts", "agent.mjs")]);
 // dev/testing holds the tests the model must satisfy; it must not edit them.
-const PROTECTED_DIRS = [".ollama", join("dev", "testing")];
+// AGENT_READONLY (comma-separated project-relative paths) can only add protection, never remove it.
+const PROTECTED_DIRS = [
+  ".ollama",
+  join("dev", "testing"),
+  ...(process.env.AGENT_READONLY ?? "").split(",").map((p) => p.trim()).filter(Boolean).map((p) => join(p)),
+];
 
 mkdirSync(dirname(logFile), { recursive: true });
 writeFileSync(logFile, "");
@@ -219,6 +224,13 @@ try {
     { role: "system", content: SYSTEM_PROMPT },
     { role: "user", content: task },
   ];
+  // Optional gate: AGENT_VERIFY names an allow-listed command that must exit 0 before a
+  // final answer is accepted, so the model cannot claim success without passing tests.
+  const verifyCommand = process.env.AGENT_VERIFY?.trim() || null;
+  if (verifyCommand && !loadAllowlist().includes(verifyCommand)) {
+    throw new Error("AGENT_VERIFY must be an exact command in .ollama/allowlist.json.");
+  }
+  let finished = false;
   let toolUsed = false;
   for (let step = 1; step <= MAX_STEPS; step++) {
     if (messages.reduce((sum, m) => sum + m.content.length, 0) > MAX_CONVERSATION) {
@@ -232,14 +244,25 @@ try {
       const call = JSON.parse(reply);
       if (typeof call.final === "string") {
         if (!toolUsed) throw new Error("You have not called any tool yet. Call a tool first, then answer from its result.");
-        log(`FINAL: ${call.final}`);
-        break;
+        if (verifyCommand) {
+          const check = await runCommand(verifyCommand);
+          log(`[${step}] VERIFY ${verifyCommand} -> ${check.split("\n")[0]}`);
+          if (!check.startsWith("exit=0\n")) {
+            result = `Final answer rejected: ${verifyCommand} still fails. Fix the code, then run it again.\n${check}`;
+          }
+        }
+        if (result === undefined) {
+          log(`FINAL: ${call.final}`);
+          finished = true;
+          break;
+        }
+      } else {
+        const tool = Object.hasOwn(tools, call.tool) ? tools[call.tool] : undefined;
+        if (!tool) throw new Error(`Unknown tool: ${String(call.tool)}`);
+        log(`[${step}] ${call.tool} ${JSON.stringify(call.args ?? {}).slice(0, 300)}`);
+        toolUsed = true;
+        result = String(await tool(call.args ?? {}));
       }
-      const tool = Object.hasOwn(tools, call.tool) ? tools[call.tool] : undefined;
-      if (!tool) throw new Error(`Unknown tool: ${String(call.tool)}`);
-      log(`[${step}] ${call.tool} ${JSON.stringify(call.args ?? {}).slice(0, 300)}`);
-      toolUsed = true;
-      result = String(await tool(call.args ?? {}));
     } catch (error) {
       // Small models repeat malformed calls unless told the exact shape.
       result = `Error: ${error.message}\nYour reply was: ${reply.slice(0, 300)}\n` +
@@ -250,6 +273,7 @@ try {
     messages.push({ role: "user", content: `Tool result:\n${result.slice(0, MAX_OUTPUT)}` });
     if (step === MAX_STEPS) log("STOP: step limit reached.");
   }
+  if (!finished) process.exitCode = 1;
 } finally {
   rl.close();
 }

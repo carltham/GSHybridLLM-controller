@@ -34,7 +34,7 @@ npm audit
 - `src/core/controller.ts`: approval gates, Copilot planning, Ollama calls, limits
 - `src/cli/index.ts`: terminal interface
 - `dev/testing/unit/controller.test.ts`: mocked tests (no network, auth, or live inference)
-- `dev/testing/specs/<name>/`: top-down TDD specs for the local agent (tests + `task.txt`)
+- `dev/testing/specs/<name>/`: freestanding sample-game scaffolds for the local agent
 
 ## Local agent (`scripts/agent.mjs`)
 
@@ -84,8 +84,14 @@ deleted from it. Do not change the service without explicit go-ahead.
 Runtime validation's test parser does not recognize Node's test-count format; confirm
 the 9 controller tests with a direct `node --test`.
 
-Top-down TDD samples: `dev/testing/specs/<name>/` (tracked) holds the tests and `task.txt`.
-`node dev/testing/run-sample.mjs <name>` deletes `dist/testing/<name>/` (git-ignored output),
-copies the specs in and runs the local agent. The model cannot write `dev/testing/`.
-`AGENT_ANSWERS=<file>` gives pre-written approvals (`write: y`, `run: n`; missing → no).
+Top-down TDD sample games: each game is freestanding (own folder, `package.json`,
+tests, dependencies), never sharing the root `package.json`. Spec layout:
+`dev/testing/specs/<name>/{task.txt,verify.txt,game/}`, where `game/` is the scaffold
+(`package.json`, `README.md`, `test/`). `node dev/testing/run-sample.mjs <name>` deletes
+`dist/games/<name>/` (git-ignored output), copies `game/` there, runs `npm ci` if the game
+has a lockfile, and runs the local agent. The model cannot write `dev/testing/`, nor
+anything copied from the scaffold except `src/` (`AGENT_READONLY`). UI games (tictactoe:
+React + Vite) use Playwright, pinned to 1.63.0 to match the locally cached Chromium. `AGENT_VERIFY` (from `verify.txt`, must be allow-listed) has to exit 0
+before a final answer is accepted. `AGENT_ANSWERS=<file>` gives pre-written approvals
+(`write: y`, `run: n`; missing → no).
 There is no CI; tests are run locally.

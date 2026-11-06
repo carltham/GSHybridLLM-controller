@@ -1,8 +1,8 @@
-// Tests written first; the local agent must implement game.mjs so they pass.
-// Run (after dev/testing/run-sample.mjs copies it to dist/testing): node --test dist/testing/guess-game/game.test.mjs
+// Inner-layer unit tests (top-down TDD step 2). Not part of the scaffold yet.
+// Inner layer for a later top-down TDD step: copy to game/test/ once play() passes (import ../src/game.mjs).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkGuess, createGame } from "./game.mjs";
+import { checkGuess, createGame } from "../src/game.mjs";
 
 test("checkGuess says 'low' when the guess is below the secret", () => {
   assert.equal(checkGuess(50, 10), "low");

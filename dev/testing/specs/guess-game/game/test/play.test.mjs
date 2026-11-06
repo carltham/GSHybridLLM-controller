@@ -1,10 +1,10 @@
 // Top-down TDD, outer layer: acceptance tests for a whole game as a player sees it.
 // play(secret, inputs) takes the player's typed lines and returns the printed lines.
-// The unit tests in game.test.mjs are the layer below.
-// Run (after dev/testing/run-sample.mjs copies it to dist/testing): node --test dist/testing/guess-game/play.test.mjs
+// The unit tests in ../../later/game.test.mjs are the layer below.
+// Run inside the game folder: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { play } from "./game.mjs";
+import { play } from "../src/game.mjs";
 
 test("a player wins after a low and a high guess", () => {
   assert.deepEqual(play(42, ["10", "80", "42"]), [

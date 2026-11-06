@@ -1,0 +1,11 @@
+{
+  "name": "hangman",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Terminal hangman game.",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}
