@@ -15,6 +15,7 @@ const MAX_WRITE = 200000;
 const MAX_OUTPUT = 8000;
 const MAX_CONVERSATION = 40000;
 const COMMAND_TIMEOUT_MS = 120000;
+const KILL_GRACE_MS = 10000;
 
 const root = realpathSync(resolve(dirname(fileURLToPath(import.meta.url)), ".."));
 const allowlistFile = join(root, ".ollama", "allowlist.json");
@@ -119,13 +120,27 @@ function runCommand(command) {
     };
     child.stdout.on("data", collect);
     child.stderr.on("data", collect);
-    const timer = setTimeout(() => process.kill(-child.pid, "SIGKILL"), COMMAND_TIMEOUT_MS);
+    const signalGroup = (signal) => {
+      try {
+        process.kill(-child.pid, signal);
+      } catch {
+        // Process group already gone.
+      }
+    };
+    // SIGTERM first so tools such as Playwright can stop servers they started; SIGKILL after a grace period.
+    let killTimer;
+    const timer = setTimeout(() => {
+      signalGroup("SIGTERM");
+      killTimer = setTimeout(() => signalGroup("SIGKILL"), KILL_GRACE_MS);
+    }, COMMAND_TIMEOUT_MS);
     child.on("error", (error) => {
       clearTimeout(timer);
+      clearTimeout(killTimer);
       done(`error: ${error.message}`);
     });
     child.on("close", (code, signal) => {
       clearTimeout(timer);
+      clearTimeout(killTimer);
       done(`exit=${code ?? signal}\n${output.slice(0, MAX_OUTPUT)}`);
     });
   });
@@ -147,6 +162,9 @@ const tools = {
   },
   async write_file({ path, content }) {
     if (typeof content !== "string" || content.length > MAX_WRITE) throw new Error("Invalid or too large content.");
+    if (/^\s*```/.test(content)) {
+      throw new Error("Content starts with a markdown code fence (```). Send only the raw file content, without ``` lines.");
+    }
     const real = safePath(path, true);
     const exists = existsSync(real);
     const choice = await approve(
@@ -164,7 +182,10 @@ const tools = {
     const allowed = loadAllowlist();
     if (!allowed.includes(command)) {
       const choice = await approve(`RUN: ${command}`, true, "run");
-      if (choice === "no") return "Denied by user.";
+      if (choice === "no") {
+        const verify = process.env.AGENT_VERIFY?.trim();
+        return verify ? `Denied by user. To run the tests use exactly: ${verify}` : "Denied by user.";
+      }
       if (choice === "always") saveAllowlist([...allowed, command]);
     }
     return runCommand(command);

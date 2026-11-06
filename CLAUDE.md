@@ -85,13 +85,18 @@ Runtime validation's test parser does not recognize Node's test-count format; co
 the 9 controller tests with a direct `node --test`.
 
 Top-down TDD sample games: each game is freestanding (own folder, `package.json`,
-tests, dependencies), never sharing the root `package.json`. Spec layout:
-`dev/testing/specs/<name>/{task.txt,verify.txt,game/}`, where `game/` is the scaffold
-(`package.json`, `README.md`, `test/`). `node dev/testing/run-sample.mjs <name>` deletes
-`dist/games/<name>/` (git-ignored output), copies `game/` there, runs `npm ci` if the game
-has a lockfile, and runs the local agent. The model cannot write `dev/testing/`, nor
-anything copied from the scaffold except `src/` (`AGENT_READONLY`). UI games (tictactoe:
-React + Vite) use Playwright, pinned to 1.63.0 to match the locally cached Chromium. `AGENT_VERIFY` (from `verify.txt`, must be allow-listed) has to exit 0
+tests, dependencies), never sharing the root `package.json`; this project is only the
+creator. Spec layout: `dev/testing/specs/<name>/{task.txt,verify.txt,game/,steps/}`, where
+`game/` is the scaffold and `steps/` holds ordered step tests (`01-….test.mjs`).
+`node dev/testing/run-sample.mjs <name>` deletes `dist/games/<name>/` (git-ignored), copies
+`game/`, runs `npm ci` if there is a lockfile, then adds one step test at a time (earlier
+ones stay). Each failing step gets up to `SAMPLE_ROUNDS` (default 3) fresh agent runs of
+12 steps, each given the current test output. Summary and agent logs: `logs/sample-<name>.log`.
+The model cannot write `dev/testing/`, `test/`, or anything copied from the scaffold except
+`src/` (`AGENT_READONLY`). `AGENT_VERIFY` (= `verify.txt`, must be allow-listed) must exit 0
 before a final answer is accepted. `AGENT_ANSWERS=<file>` gives pre-written approvals
-(`write: y`, `run: n`; missing → no).
+(`write: y`, `run: n`; missing → no). Writes starting with a ``` fence are rejected.
+Commands get SIGTERM on timeout, then SIGKILL. tictactoe (React + Vite) uses Playwright
+1.63.0 (matches the cached Chromium) with Vite started in-process by
+`playwright.global-setup.mjs`, so no server outlives a killed test run.
 There is no CI; tests are run locally.
