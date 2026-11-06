@@ -9,6 +9,9 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MODEL = process.env.LOCAL_MODEL ?? "qwen2.5-coder:3b";
+// OLLAMA_PORT only changes the port (used by tests with a fake model); the host is always loopback.
+const OLLAMA_PORT = Number(process.env.OLLAMA_PORT ?? 11434);
+if (!Number.isInteger(OLLAMA_PORT) || OLLAMA_PORT < 1 || OLLAMA_PORT > 65535) throw new Error("OLLAMA_PORT must be 1-65535.");
 const MAX_STEPS = 12;
 const MAX_READ = 64000;
 const MAX_WRITE = 200000;
@@ -24,8 +27,10 @@ const logFile = join(root, "logs", "terminal-output.log");
 const PROTECTED = new Set([join("scripts", "agent.mjs")]);
 // dev/testing holds the tests the model must satisfy; it must not edit them.
 // AGENT_READONLY (comma-separated project-relative paths) can only add protection, never remove it.
+// data/ holds the knowledge DB that records the model's own runs; the model must not alter it.
 const PROTECTED_DIRS = [
   ".ollama",
+  "data",
   join("dev", "testing"),
   ...(process.env.AGENT_READONLY ?? "").split(",").map((p) => p.trim()).filter(Boolean).map((p) => join(p)),
 ];
@@ -37,14 +42,24 @@ const log = (line) => {
   appendFileSync(logFile, line + "\n");
 };
 
+// Structured events for the knowledge DB: AGENT_EVENTS=path appends one JSON line per step.
+// The runner owns the database; the agent only reports. Errors carry a failure "kind".
+const eventsFile = process.env.AGENT_EVENTS ? resolve(process.env.AGENT_EVENTS) : null;
+let eventSeq = 0;
+const emit = (event) => {
+  if (eventsFile) appendFileSync(eventsFile, JSON.stringify({ seq: ++eventSeq, ...event }) + "\n");
+};
+const fail = (kind, message) => Object.assign(new Error(message), { kind });
+const MAX_DETAIL = 20000;
+
 const isBlocked = (segment) => segment === ".git" || segment === "node_modules" || segment.startsWith(".env");
 
 function safePath(rel, forWrite) {
-  if (typeof rel !== "string" || rel === "" || rel.includes("\0")) throw new Error("Invalid path.");
+  if (typeof rel !== "string" || rel === "" || rel.includes("\0")) throw fail("bad-args", "Invalid path.");
   const abs = resolve(root, rel);
   if (forWrite) {
     try {
-      if (lstatSync(abs).isSymbolicLink()) throw new Error("Writing through symlinks is not allowed.");
+      if (lstatSync(abs).isSymbolicLink()) throw fail("blocked-path", "Writing through symlinks is not allowed.");
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }
@@ -54,11 +69,11 @@ function safePath(rel, forWrite) {
   const real = join(realpathSync(probe), relative(probe, abs));
   const rootRelative = relative(root, real);
   if (rootRelative === ".." || rootRelative.startsWith(".." + sep) || isAbsolute(rootRelative)) {
-    throw new Error("Path is outside the project.");
+    throw fail("blocked-path", "Path is outside the project.");
   }
-  if (rootRelative.split(sep).some(isBlocked)) throw new Error("Path is blocked (.git, node_modules, .env*).");
+  if (rootRelative.split(sep).some(isBlocked)) throw fail("blocked-path", "Path is blocked (.git, node_modules, .env*).");
   if (forWrite && (PROTECTED.has(rootRelative) || PROTECTED_DIRS.some((d) => rootRelative === d || rootRelative.startsWith(d + sep)))) {
-    throw new Error("Path is protected.");
+    throw fail("protected-path", "Path is protected.");
   }
   return real;
 }
@@ -149,7 +164,7 @@ function runCommand(command) {
 const tools = {
   async read_file({ path }) {
     const real = safePath(path, false);
-    if (!statSync(real).isFile()) throw new Error("Not a file.");
+    if (!statSync(real).isFile()) throw fail("bad-args", "Not a file.");
     const text = readFileSync(real, "utf8");
     return text.length > MAX_READ ? text.slice(0, MAX_READ) + "\n[truncated]" : text;
   },
@@ -161,9 +176,9 @@ const tools = {
       .join("\n");
   },
   async write_file({ path, content }) {
-    if (typeof content !== "string" || content.length > MAX_WRITE) throw new Error("Invalid or too large content.");
+    if (typeof content !== "string" || content.length > MAX_WRITE) throw fail("bad-args", "Invalid or too large content.");
     if (/^\s*```/.test(content)) {
-      throw new Error("Content starts with a markdown code fence (```). Send only the raw file content, without ``` lines.");
+      throw fail("fence", "Content starts with a markdown code fence (```). Send only the raw file content, without ``` lines.");
     }
     const real = safePath(path, true);
     const exists = existsSync(real);
@@ -172,23 +187,27 @@ const tools = {
       false,
       "write",
     );
-    if (choice === "no") return "Denied by user.";
+    if (choice === "no") return { text: "Denied by user.", outcome: "denied", kind: "denied-write" };
     mkdirSync(dirname(real), { recursive: true });
     writeFileSync(real, content);
-    return "Written.";
+    return { text: "Written.", detail: content.slice(0, MAX_DETAIL) };
   },
   async run_command({ command }) {
-    if (typeof command !== "string" || command.trim() === "" || command.length > 1000) throw new Error("Invalid command.");
+    if (typeof command !== "string" || command.trim() === "" || command.length > 1000) throw fail("bad-args", "Invalid command.");
     const allowed = loadAllowlist();
     if (!allowed.includes(command)) {
       const choice = await approve(`RUN: ${command}`, true, "run");
       if (choice === "no") {
         const verify = process.env.AGENT_VERIFY?.trim();
-        return verify ? `Denied by user. To run the tests use exactly: ${verify}` : "Denied by user.";
+        const text = verify ? `Denied by user. To run the tests use exactly: ${verify}` : "Denied by user.";
+        return { text, outcome: "denied", kind: "denied-command", detail: command };
       }
       if (choice === "always") saveAllowlist([...allowed, command]);
     }
-    return runCommand(command);
+    const text = await runCommand(command);
+    const exit = text.slice(5, text.indexOf("\n"));
+    const kind = exit === "0" ? null : exit === "SIGTERM" || exit === "SIGKILL" ? "timeout" : "nonzero-exit";
+    return { text, outcome: kind === "timeout" ? "error" : "ok", kind, detail: `${command}\n${text}`.slice(0, MAX_DETAIL) };
   },
 };
 
@@ -212,7 +231,7 @@ src/
 assistant: {"final": "The root contains README.md and a src/ directory."}`;
 
 async function chat(messages) {
-  const response = await fetch("http://127.0.0.1:11434/api/chat", {
+  const response = await fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/chat`, {
     method: "POST",
     redirect: "error",
     signal: AbortSignal.timeout(600000),
@@ -256,43 +275,69 @@ try {
   for (let step = 1; step <= MAX_STEPS; step++) {
     if (messages.reduce((sum, m) => sum + m.content.length, 0) > MAX_CONVERSATION) {
       log("STOP: conversation size limit reached.");
+      emit({ step, tool: "stop", outcome: "error", kind: "conversation-limit", ms: 0 });
       break;
     }
+    const started = Date.now();
     const reply = await chat(messages);
     messages.push({ role: "assistant", content: reply });
     let result;
+    const event = { step, tool: null, path: null, outcome: "ok", kind: null, detail: null };
     try {
-      const call = JSON.parse(reply);
+      let call;
+      try {
+        call = JSON.parse(reply);
+      } catch {
+        throw fail("bad-json", "Reply is not valid JSON.");
+      }
       if (typeof call.final === "string") {
-        if (!toolUsed) throw new Error("You have not called any tool yet. Call a tool first, then answer from its result.");
+        event.tool = "final";
+        event.detail = call.final.slice(0, MAX_DETAIL);
+        if (!toolUsed) throw fail("no-tool-before-final", "You have not called any tool yet. Call a tool first, then answer from its result.");
         if (verifyCommand) {
           const check = await runCommand(verifyCommand);
           log(`[${step}] VERIFY ${verifyCommand} -> ${check.split("\n")[0]}`);
           if (!check.startsWith("exit=0\n")) {
             result = `Final answer rejected: ${verifyCommand} still fails. Fix the code, then run it again.\n${check}`;
+            Object.assign(event, { outcome: "rejected", kind: "verify-failed", detail: check.slice(-MAX_DETAIL) });
           }
         }
         if (result === undefined) {
           log(`FINAL: ${call.final}`);
+          emit({ ...event, ms: Date.now() - started });
           finished = true;
           break;
         }
       } else {
+        event.tool = typeof call.tool === "string" ? call.tool.slice(0, 100) : null;
         const tool = Object.hasOwn(tools, call.tool) ? tools[call.tool] : undefined;
-        if (!tool) throw new Error(`Unknown tool: ${String(call.tool)}`);
+        if (!tool) throw fail("unknown-tool", `Unknown tool: ${String(call.tool)}`);
+        event.path = typeof call.args?.path === "string" ? call.args.path.slice(0, 500) : null;
         log(`[${step}] ${call.tool} ${JSON.stringify(call.args ?? {}).slice(0, 300)}`);
         toolUsed = true;
-        result = String(await tool(call.args ?? {}));
+        const value = await tool(call.args ?? {});
+        const meta = typeof value === "string" ? { text: value } : value;
+        result = String(meta.text);
+        Object.assign(event, { outcome: meta.outcome ?? "ok", kind: meta.kind ?? null, detail: meta.detail ?? null });
       }
     } catch (error) {
+      Object.assign(event, {
+        outcome: "error",
+        kind: error.kind ?? (error.code ? "io-error" : "error"),
+        detail: `${error.message}\nReply: ${reply.slice(0, 2000)}`,
+      });
       // Small models repeat malformed calls unless told the exact shape.
       result = `Error: ${error.message}\nYour reply was: ${reply.slice(0, 300)}\n` +
         `Reply with exactly one JSON object such as {"tool": "run_command", "args": {"command": "npm test"}} ` +
         `- the tool's arguments go inside "args".`;
     }
+    emit({ ...event, ms: Date.now() - started });
     log(`    -> ${result.slice(0, 300).replaceAll("\n", "\n       ")}`);
     messages.push({ role: "user", content: `Tool result:\n${result.slice(0, MAX_OUTPUT)}` });
-    if (step === MAX_STEPS) log("STOP: step limit reached.");
+    if (step === MAX_STEPS) {
+      log("STOP: step limit reached.");
+      emit({ step, tool: "stop", outcome: "error", kind: "step-limit", ms: 0 });
+    }
   }
   if (!finished) process.exitCode = 1;
 } finally {

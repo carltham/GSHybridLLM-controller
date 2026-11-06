@@ -35,6 +35,7 @@ npm audit
 - `src/cli/index.ts`: terminal interface
 - `dev/testing/unit/controller.test.ts`: mocked tests (no network, auth, or live inference)
 - `dev/testing/specs/<name>/`: freestanding sample-game scaffolds for the local agent
+- `dev/architecture/`: architecture docs (start at `README.md`; ✅ implemented, 📐 planned)
 
 ## Local agent (`scripts/agent.mjs`)
 
@@ -95,7 +96,11 @@ ones stay). Each failing step gets up to `SAMPLE_ROUNDS` (default 3) fresh agent
 The model cannot write `dev/testing/`, `test/`, or anything copied from the scaffold except
 `src/` (`AGENT_READONLY`). `AGENT_VERIFY` (= `verify.txt`, must be allow-listed) must exit 0
 before a final answer is accepted. `AGENT_ANSWERS=<file>` gives pre-written approvals
-(`write: y`, `run: n`; missing → no). Writes starting with a ``` fence are rejected.
+(`write: y`, `run: n`; missing → no). Runs are recorded in `data/knowledge.db` (SQLite,
+git-ignored, never exported to GitHub, snapshots in `data/backups/`); `node
+dev/testing/report.mjs` summarizes. `npm test` also runs `dev/testing/unit/*.test.mjs` and the acceptance tests
+`dev/testing/acceptance/*.test.mjs` (fake model via `OLLAMA_PORT`, temp DB via
+`SAMPLE_DATA_DIR`). Work strictly top-down TDD: failing acceptance test first. Writes starting with a ``` fence are rejected.
 Commands get SIGTERM on timeout, then SIGKILL. tictactoe (React + Vite) uses Playwright
 1.63.0 (matches the cached Chromium) with Vite started in-process by
 `playwright.global-setup.mjs`, so no server outlives a killed test run.
