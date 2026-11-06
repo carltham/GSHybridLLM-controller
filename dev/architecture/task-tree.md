@@ -78,11 +78,9 @@ Handing a task to a stronger model needs approval, or is limited to local models
 
 ## What is recorded
 
-In the knowledge DB ([knowledge-db.md](./knowledge-db.md)), extended with the tree:
-
-```
-tasks   + parent_id, depth, origin (hand | decomposer:<model>)
-```
+In the knowledge DB ([knowledge-db.md](./knowledge-db.md)). The tree columns already exist
+(`tasks.parent_id`, `depth`, `origin` = `hand` | `decomposer:<model>`); today every task is a
+root with origin `hand`.
 
 - **Success chains:** the path of passing tasks.
 - **Where splitting helped:** parent failed, then passed after its children did.
@@ -145,5 +143,5 @@ go to the cloud by default), and the provider's terms must allow training on its
 2. **Automatic decomposition** by a decomposer model, guarded by `valid()` and the budget.
 3. **Memoization** through the knowledge DB, so solved tasks are reused.
 
-Prerequisites: atomic tools in the agent ([local-agent.md](./local-agent.md)) and the knowledge
-DB ([knowledge-db.md](./knowledge-db.md)).
+Prerequisites, both built: atomic tools in the agent ([local-agent.md](./local-agent.md)) and
+the knowledge DB ([knowledge-db.md](./knowledge-db.md)).

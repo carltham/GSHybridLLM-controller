@@ -30,20 +30,23 @@ Names follow GS-EBS-Brain's learning system so the store can move there unchange
 (see [ebs-brain-alignment.md](./ebs-brain-alignment.md)).
 
 ```
-tasks          id, name (game), spec_hash, created
-steps          id, task_id, ord, name (e.g. 02-hit), test_hash
+tasks          id, name (game), spec_hash, parent_id, depth, origin (hand), created   -- tree columns for task-tree.md
+steps          id, task_id, ord, name (e.g. 02-hit), test_hash                         -- changed test = new row
 runs           id, task_id, model, started, finished, rounds_limit, result, steps_passed, steps_total
-attempts       id, run_id, step_id, round, started, duration_ms, result (PASS|FAIL), tests_passed, tests_total
-events         id, attempt_id, seq, tool, path, outcome (ok|error|denied|rejected), kind, duration_ms, detail
+attempts       id, run_id, step_id, round (0 = check before agent), started, duration_ms, agent_exit,
+               result (PASS|FAIL), tests_passed, tests_total
+events         id, attempt_id, seq, agent_step, tool, path, outcome (ok|error|denied|rejected), kind,
+               duration_ms, detail
 verifications  id, attempt_id, command, exit_code, passed, failed, output_tail
-chains         id, attempt_id, signature (e.g. read_file→write_file→run_command→final)   -- passing attempts
-credit         id, model, step_id, attempts_to_pass, first_pass_run_id                   -- who solved what
+chains         id, attempt_id, signature (e.g. read_source→replace_in_file→run_tests→final)  -- passing attempts
+credit         id, model, step_id, run_id, attempts_to_pass                                  -- who solved what
 ```
 
 Failure `kind` values: `fence`, `protected-path`, `blocked-path`, `bad-args`, `io-error`,
 `denied-write`, `denied-command`, `bad-json`, `unknown-tool`, `no-tool-before-final`,
-`verify-failed`, `nonzero-exit`, `timeout`, `step-limit`, `conversation-limit`
-(📐 `wrong-file` once atomic tools name the target file).
+`replace-no-match`, `replace-ambiguous`, `verify-failed`, `nonzero-exit`, `timeout`,
+`step-limit`, `conversation-limit`, and `error` for anything unclassified. A wrong-file
+kind is not needed: in TDD mode the model cannot name a file.
 
 ## Example queries
 

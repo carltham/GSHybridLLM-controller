@@ -39,3 +39,7 @@ Short records of decisions taken, newest last. Each: decision, reason, consequen
     test (runner + agent + fake loopback model + temporary DB), then the implementation, then
     inner unit tests. The knowledge DB was first built test-after; it was set aside, its
     acceptance tests were written and shown red, and only then restored and made green.
+16. **TDD mode with atomic tools is the runner's only mode.** The model edits one named source
+    file, starting from a starter with the right shape, and runs only the gate command. The task
+    carries the current source and step test; temperature 0.2. Acceptance tests run serially
+    because they share `dist/games/guess-game/`.

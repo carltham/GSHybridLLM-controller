@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && node --test dist/dev/testing/unit/controller.test.js dev/testing/unit/*.test.mjs dev/testing/acceptance/*.test.mjs",
+    "test": "npm run build && node --test --test-concurrency=1 dist/dev/testing/unit/controller.test.js dev/testing/unit/*.test.mjs dev/testing/acceptance/*.test.mjs",
     "start": "node dist/src/cli/index.js"
   },
   "dependencies": {

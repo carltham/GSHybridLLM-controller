@@ -15,7 +15,7 @@ EBS-Brain code.
 | Synthesizes and compiles a new tool | Agent writes `src/` of a freestanding game | ✅ |
 | Tool must pass the test harness before use | Verify gate (`AGENT_VERIFY`) | ✅ |
 | No neuron judges its own work | Tests, configs and gate are write-protected | ✅ |
-| Persists what works, gets credit | `chains`, `credit` tables | 📐 |
+| Persists what works, gets credit | `chains`, `credit` tables in the knowledge DB | ✅ |
 | Others discover and reuse the capability | Success chains as examples for later runs | 📐 |
 | REQUEST → EXECUTE: confirm a chain exists before dispatch | Planner checks every step has a test before execution | 📐 |
 

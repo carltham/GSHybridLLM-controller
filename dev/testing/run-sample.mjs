@@ -31,11 +31,15 @@ const model = process.env.LOCAL_MODEL ?? "qwen2.5-coder:3b";
 const specDir = join(root, "dev", "testing", "specs", name);
 const scaffold = join(specDir, "game");
 const stepsDir = join(specDir, "steps");
-for (const required of [join(specDir, "task.txt"), join(specDir, "verify.txt"), join(scaffold, "package.json"), stepsDir]) {
+for (const required of [join(specDir, "task.txt"), join(specDir, "verify.txt"), join(specDir, "target.txt"), join(scaffold, "package.json"), stepsDir]) {
   if (!existsSync(required)) throw new Error(`Spec ${name} is missing ${required}`);
 }
 const baseTask = readFileSync(join(specDir, "task.txt"), "utf8").trim();
 const verify = readFileSync(join(specDir, "verify.txt"), "utf8").trim();
+// target.txt: the one source file (relative to the game) the agent may change, in TDD mode.
+const target = readFileSync(join(specDir, "target.txt"), "utf8").trim();
+if (!/^src\/[\w./-]+$/.test(target) || target.includes("..")) throw new Error(`target.txt must name a file under src/: ${target}`);
+const temperature = process.env.SAMPLE_TEMPERATURE ?? "0.2";
 const steps = readdirSync(stepsDir).filter((f) => /\.(test|spec)\.mjs$/.test(f)).sort();
 if (steps.length === 0) throw new Error(`No step tests in ${stepsDir}`);
 
@@ -74,6 +78,9 @@ const readonly = new Set([...readdirSync(scaffold), "test"].filter((entry) => en
 const agentEnv = {
   ...process.env,
   AGENT_VERIFY: verify,
+  AGENT_TARGET: join(outRel, target),
+  AGENT_TESTS: join(outRel, "test"),
+  AGENT_TEMPERATURE: temperature,
   AGENT_READONLY: [...readonly].map((entry) => join(outRel, entry)).join(","),
 };
 
@@ -124,12 +131,16 @@ try {
       continue;
     }
     for (let round = 1; round <= rounds && !status.ok; round++) {
+      // Everything the model needs is in the task, so it does not have to spend steps reading.
+      // Sections are marked with --- lines, not markdown fences, which small models copy.
+      const source = existsSync(join(outDir, target)) ? readFileSync(join(outDir, target), "utf8") : "";
       const task = [
         baseTask,
-        `This is ${label}, round ${round}/${rounds}. The tests in ${outRel}/test/ are fixed: do not edit them.`,
-        `New test for this step: ${outRel}/test/${step}. Earlier tests in that folder must keep passing.`,
-        `Run the tests with exactly this command: ${verify}`,
+        `This is ${label}, round ${round}/${rounds}. The tests are fixed; earlier tests must keep passing.`,
+        `Current source (${target}):\n--- ${target} ---\n${source || "(empty)"}\n--- end ---`,
+        `New test for this step:\n--- ${step} ---\n${readFileSync(join(stepsDir, step), "utf8")}\n--- end ---`,
         `Current test output:\n${tail(status.output)}`,
+        "Change the source with replace_in_file or write_source, check with run_tests, then answer final.",
       ].join("\n\n");
       attemptId = kb.startAttempt({ runId, stepId, round });
       const eventsFile = join(eventsDir, `attempt-${attemptId}.jsonl`);

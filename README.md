@@ -19,8 +19,9 @@ There is no automatic escalation or cloud review of local answers.
 ## Local agent (`scripts/agent.mjs`)
 
 Ollama as a local tool that needs no Copilot authentication. It talks only to
-`http://127.0.0.1:11434` (`LOCAL_MODEL`, default `qwen2.5-coder:3b`) and replies
-with one JSON tool call per step, up to 12 steps.
+`127.0.0.1` (port 11434; `OLLAMA_PORT` exists for test fakes) with `LOCAL_MODEL`
+(default `qwen2.5-coder:3b`), and the model replies with one JSON tool call per step,
+up to 12 steps.
 
 ```bash
 node scripts/agent.mjs "your task"
@@ -31,14 +32,26 @@ node scripts/agent.mjs "your task"
 - `run_command` asks `y/n/a`; `a` saves the exact command string to
   `.ollama/allowlist.json` (git-ignored), and that exact string then runs unprompted.
 - Paths are confined to the project root (symlinks and `..` resolved); `.git`,
-  `node_modules` and `.env*` are blocked. The model cannot write the allowlist or
-  `scripts/agent.mjs`.
+  `node_modules` and `.env*` are blocked. The model cannot write `scripts/agent.mjs`,
+  `.ollama/` (allowlist), `data/` (its own records), `dev/testing/` (tests and specs)
+  or any path in `AGENT_READONLY`.
 - Commands time out after 120 s and output is capped. The run is logged to
   `logs/terminal-output.log` (overwritten each run).
 - Uses `keep_alive: 5m` so the model is not reloaded at every step.
 
 Small models can ignore the protocol; a `final` answer before any tool call is
-rejected. The model is not a sandbox: review each approval prompt.
+rejected, and with `AGENT_VERIFY` a final answer is only accepted once that test
+command passes. The model is not a sandbox: review each approval prompt.
+
+**TDD mode** (`AGENT_TARGET` + `AGENT_TESTS`): the model gets only atomic tools bound to
+one source file (`read_test`, `read_source`, `replace_in_file`, `write_source`,
+`run_tests`) and cannot name paths or commands.
+
+**Sample games** are built test-first with `node dev/testing/run-sample.mjs <game>`
+(specs in `dev/testing/specs/`, output in `dist/games/`), step by step with several agent
+rounds per step. Every run is recorded in `data/knowledge.db` (local only, snapshots in
+`data/backups/`); `node dev/testing/report.mjs` compares models. Details:
+`dev/architecture/`.
 
 `scripts/list-models.mjs` prints Copilot auth status and model IDs (read-only).
 
@@ -108,9 +121,12 @@ npm test
 npm audit
 ```
 
-Tests mock both providers; they do not authenticate, call cloud models, download
-models, or invoke live local inference. They cover approval gates, task/input
-limits, local/cloud separation, disabled cloud capabilities, and Ollama errors.
+Tests never authenticate, call cloud models, download models or invoke live local
+inference. Controller tests mock both providers and cover approval gates, task/input
+limits, local/cloud separation, disabled cloud capabilities and Ollama errors.
+Knowledge-DB unit tests use temporary SQLite files. Acceptance tests run the real sample
+runner and agent against a fake model on `127.0.0.1` with a temporary DB; they cover the
+verify gate, recorded chains and credit, refused writes and TDD mode. Tests run serially.
 The runtime eval plan also builds and checks CLI help without network calls.
 
 The SDK currently pins an affected Zod release. `package.json` overrides it to

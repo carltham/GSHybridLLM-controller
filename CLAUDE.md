@@ -6,9 +6,12 @@ for scope and current status.
 
 ## Project
 
-Standalone terminal prototype that orchestrates two models: Copilot (cloud)
-proposes a short, bounded task plan; Ollama (local) drafts text suggestions.
-It is not a merged model and is separate from GSAccount.
+Lets local Ollama models do supervised work on this machine and measures how well they
+do it. Two parts: the local agent (`scripts/agent.mjs`, the main part, no cloud
+dependency) with a test-first sample runner and knowledge DB; and a Copilot controller
+prototype (`src/`) where Copilot proposes a short, bounded plan and Ollama drafts text
+suggestions. Not a merged model; separate from GSAccount. It prototypes the learning
+logic for GS-EBS-Brain (see `dev/architecture/`).
 
 ## Working style
 
@@ -24,7 +27,7 @@ It is not a merged model and is separate from GSAccount.
 ```bash
 npm ci               # install
 npm run build        # strict tsc build to dist/
-npm test             # build + node --test dist/dev/testing/unit/controller.test.js
+npm test             # build + all tests (controller, DB unit, acceptance), serially
 npm start -- --help  # run CLI (dist/src/cli/index.js)
 npm audit
 ```
@@ -33,8 +36,13 @@ npm audit
 
 - `src/core/controller.ts`: approval gates, Copilot planning, Ollama calls, limits
 - `src/cli/index.ts`: terminal interface
-- `dev/testing/unit/controller.test.ts`: mocked tests (no network, auth, or live inference)
-- `dev/testing/specs/<name>/`: freestanding sample-game scaffolds for the local agent
+- `scripts/agent.mjs`: local agent (broad tools, or TDD mode with atomic tools)
+- `dev/testing/run-sample.mjs`: sample runner (steps × rounds, records to the knowledge DB)
+- `dev/testing/knowledge-db.mjs`, `dev/testing/report.mjs`: knowledge DB and its report
+- `dev/testing/unit/`: controller tests (mocked) and knowledge-DB tests
+- `dev/testing/acceptance/`: outer-layer tests with a fake loopback model
+- `dev/testing/specs/<name>/`: freestanding sample-game specs for the local agent
+- `data/`: knowledge DB and snapshots (git-ignored, never exported to GitHub)
 - `dev/architecture/`: architecture docs (start at `README.md`; ✅ implemented, 📐 planned)
 
 ## Local agent (`scripts/agent.mjs`)
@@ -76,6 +84,7 @@ untested; only mocks, build, and CLI help are validated.
 
 31 GiB RAM, GTX 1050 (4 GiB VRAM), Ollama models stored in `/mnt/STORAGE/ollama`.
 `qwen2.5-coder:3b` is installed (1.9 GB) and runs 100% on the GPU at 16384 context.
+`qwen3.5:4b` is installed (3.3 GB) and runs about 68% GPU / 32% CPU (~12 tokens/s).
 
 Ollama's systemd override sets `OLLAMA_MODELS=/mnt/STORAGE/ollama` and keeps
 `OLLAMA_CONTEXT_LENGTH=16384`; verify with `systemctl show ollama`. The previous
@@ -87,7 +96,7 @@ the 9 controller tests with a direct `node --test`.
 
 Top-down TDD sample games: each game is freestanding (own folder, `package.json`,
 tests, dependencies), never sharing the root `package.json`; this project is only the
-creator. Spec layout: `dev/testing/specs/<name>/{task.txt,verify.txt,game/,steps/}`, where
+creator. Spec layout: `dev/testing/specs/<name>/{task.txt,verify.txt,target.txt,game/,steps/}`, where
 `game/` is the scaffold and `steps/` holds ordered step tests (`01-….test.mjs`).
 `node dev/testing/run-sample.mjs <name>` deletes `dist/games/<name>/` (git-ignored), copies
 `game/`, runs `npm ci` if there is a lockfile, then adds one step test at a time (earlier
@@ -100,7 +109,10 @@ before a final answer is accepted. `AGENT_ANSWERS=<file>` gives pre-written appr
 git-ignored, never exported to GitHub, snapshots in `data/backups/`); `node
 dev/testing/report.mjs` summarizes. `npm test` also runs `dev/testing/unit/*.test.mjs` and the acceptance tests
 `dev/testing/acceptance/*.test.mjs` (fake model via `OLLAMA_PORT`, temp DB via
-`SAMPLE_DATA_DIR`). Work strictly top-down TDD: failing acceptance test first. Writes starting with a ``` fence are rejected.
+`SAMPLE_DATA_DIR`), serially (`--test-concurrency=1`). Work strictly top-down TDD: failing
+acceptance test first. The runner uses the agent's TDD mode: `target.txt` names the one
+source file (starter in `game/src/`); tools `read_test`, `read_source`, `replace_in_file`,
+`write_source`, `run_tests`; temperature 0.2. Writes starting with a ``` fence are rejected.
 Commands get SIGTERM on timeout, then SIGKILL. tictactoe (React + Vite) uses Playwright
 1.63.0 (matches the cached Chromium) with Vite started in-process by
 `playwright.global-setup.mjs`, so no server outlives a killed test run.

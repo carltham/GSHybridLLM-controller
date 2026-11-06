@@ -25,9 +25,15 @@ step it asks for one tool:
 | `write_file` | Create or overwrite a file | You confirm each write (`y/n`) |
 | `run_command` | Run a shell command | You confirm (`y/n/a`); `a` allow-lists that exact command |
 
-Everything stays on your machine. The model talks only to `127.0.0.1:11434`, and
-paths are confined to the project folder (`.git`, `node_modules` and `.env*` are
-blocked).
+Everything stays on your machine. The model talks only to `127.0.0.1` (Ollama's
+port 11434), and paths are confined to the project folder (`.git`, `node_modules` and
+`.env*` are blocked).
+
+For test-first work there is a **TDD mode** with narrower, atomic tools bound to one
+source file: `read_test`, `read_source`, `replace_in_file`, `write_source` and
+`run_tests`. The model cannot choose paths or commands, and its answer only counts once
+the tests pass. The sample runner (`dev/testing/run-sample.mjs`) uses it to build small
+games step by step and records every run in a local knowledge database.
 
 ## Good uses
 
@@ -76,8 +82,12 @@ request. This is an application-level boundary, not an OS sandbox.
 
 ## Status
 
-- The agent has been run live for listing files and for an approved file write. The
-  `run_command` prompt and the allow list have not been exercised yet.
+- The agent has been run live with `qwen2.5-coder:3b` and `qwen3.5:4b`, including file
+  writes, allow-listed test commands, denied commands and the verify gate. Small models
+  get only part of the way: the 3B model stalled at step 1–2 of the sample games, the 4B
+  model reached step 3 of guess-game (before TDD mode existed).
+- TDD mode, the sample runner and the knowledge database are covered by acceptance tests
+  with a fake model; a real-model run with TDD mode is still to come.
 - The controller is verified with a strict TypeScript build, 9 mocked Node tests, CLI
   `--help`, and a clean `npm audit` (a vulnerable transitive `zod` is overridden).
 - The controller's live Copilot authentication, cloud planning and live Ollama

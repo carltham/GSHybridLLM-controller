@@ -43,6 +43,8 @@ A denied command is answered with the exact allowed test command when `AGENT_VER
 | `AGENT_VERIFY` | Allow-listed command that must exit 0 before a final answer is accepted |
 | `AGENT_READONLY` | Comma-separated project paths added to write protection |
 | `AGENT_EVENTS` | File for structured step events (JSON lines) |
+| `AGENT_TARGET`, `AGENT_TESTS` | Switch on TDD mode: the one source file and the test folder |
+| `AGENT_TEMPERATURE` | Sampling temperature 0–2 (runner default 0.2); unset = model default |
 
 ## Logs and events
 
@@ -51,13 +53,19 @@ A denied command is answered with the exact allowed test command when `AGENT_VER
   `kind`, `ms`, `detail`) for the knowledge DB ([knowledge-db.md](./knowledge-db.md)).
   `data/` is write-protected, so the model cannot alter its own record.
 
-## Planned: atomic tools 📐
+## TDD mode: atomic tools ✅
 
-Every free choice is a chance for a small model to fail. A "TDD mode" would replace the broad
-tools with narrow ones bound to the current step:
+Every free choice is a chance for a small model to fail. With `AGENT_TARGET` (one source file)
+and `AGENT_TESTS` (one test folder) set, and `AGENT_VERIFY` required, the agent offers only:
 
-| Now | Atomic |
-| --- | --- |
-| `write_file(path, content)` | `replace_in_file(old, new)` on the one source file named by the task |
-| `run_command(any)` | `run_tests()`: always the gate command |
-| `read_file(path)` | `read_test()`, `read_source()` |
+| Tool | Does | Replaces |
+| --- | --- | --- |
+| `read_test {}` | Shows all test files in `AGENT_TESTS` | `read_file(path)` |
+| `read_source {}` | Shows the target file | `read_file(path)` |
+| `replace_in_file {old, new}` | Replaces one exact, unique piece of text (approval as a write) | `write_file(path, …)` |
+| `write_source {content}` | Replaces the whole target file (approval as a write) | `write_file(path, …)` |
+| `run_tests {}` | Runs `AGENT_VERIFY` | `run_command(any)` |
+
+The model cannot name a path or a command. Broad tools are answered as `unknown-tool`.
+New failure kinds: `replace-no-match`, `replace-ambiguous`. Writes still pass through the
+path rules and the fence check. The sample runner always uses TDD mode.

@@ -38,19 +38,20 @@ Status markers used in these documents: ✅ implemented · 🧪 implemented, not
 
 | Component | Path | Status | Role |
 | --- | --- | --- | --- |
-| Local agent | `scripts/agent.mjs` | ✅ | One model, one JSON tool call per turn; approvals, allowlist, read-only paths, verify gate |
+| Local agent | `scripts/agent.mjs` | ✅ | One model, one JSON tool call per turn; approvals, allowlist, read-only paths, verify gate, events; TDD mode with atomic tools |
 | Sample runner | `dev/testing/run-sample.mjs` | ✅ | Builds a freestanding game from specs: step by step, up to N agent rounds per step |
-| Specs | `dev/testing/specs/<game>/` | ✅ | Scaffold (`game/`), ordered step tests (`steps/`), `task.txt`, `verify.txt` |
+| Specs | `dev/testing/specs/<game>/` | ✅ | Scaffold with starter (`game/`), ordered step tests (`steps/`), `task.txt`, `verify.txt`, `target.txt` |
 | Generated games | `dist/games/<game>/` | ✅ | Output; git-ignored, rebuilt on every run |
 | Knowledge DB | `data/knowledge.db`, `dev/testing/knowledge-db.mjs`, `report.mjs` | ✅ | Runs, attempts, tool events, verifications, success chains, credit; snapshots |
 | Task tree | (runner extension) | 📐 | Recursive decomposition; every node tested, leaves run as chains |
 | Copilot controller | `src/` | 🧪 | Copilot proposes 1–3 steps after `SEND`; Ollama drafts text after `RUN` |
-| Unit tests | `dev/testing/unit/` | ✅ | Mocked controller tests (`npm test`) |
+| Acceptance tests | `dev/testing/acceptance/` | ✅ | Outer layer: real runner and agent against a fake loopback model, temporary DB (`npm test`) |
+| Unit tests | `dev/testing/unit/` | ✅ | Inner layer: mocked controller tests, knowledge-DB tests (`npm test`) |
 
 ## Boundaries that hold everywhere
 
-- **Local stays local.** The agent talks only to `http://127.0.0.1:11434`. Local context and
-  results are never sent to a cloud model.
+- **Local stays local.** The agent talks only to `127.0.0.1` (port 11434, or `OLLAMA_PORT` for a
+  fake model in tests). Local context and results are never sent to a cloud model.
 - **The model never judges its own work.** Tests, configs and the gate command are outside
   its write access; success is decided by running the tests, not by the model's answer.
 - **Generated games are freestanding.** Each has its own `package.json` and dependencies;
