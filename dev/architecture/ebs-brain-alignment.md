@@ -13,11 +13,15 @@ EBS-Brain code.
 | Neuron enters learning mode for a task it cannot do | Agent run on a spec step that fails | ✅ |
 | Decomposes the problem into atomic steps | `steps/` tests; 📐 recursive task tree ([task-tree.md](./task-tree.md)) | ✅ / 📐 |
 | Synthesizes and compiles a new tool | Agent writes `src/` of a freestanding game | ✅ |
+| The tool is executed instead of re-learned | Program neurons: stored verified programs, run without the LLM ([program-neurons.md](./program-neurons.md)) | 📐 |
 | Tool must pass the test harness before use | Verify gate (`AGENT_VERIFY`) | ✅ |
 | No neuron judges its own work | Tests, configs and gate are write-protected | ✅ |
-| Persists what works, gets credit | `chains`, `credit` tables in the knowledge DB | ✅ |
+| Persists what works, gets credit | `credit` per step and run ✅; step and chain rewards, blame, reputation, promotion ([credit-and-promotion.md](./credit-and-promotion.md)) 📐 | ✅ / 📐 |
 | Others discover and reuse the capability | Success chains as examples for later runs | 📐 |
-| REQUEST → EXECUTE: confirm a chain exists before dispatch | Planner checks every step has a test before execution | 📐 |
+| REQUEST → EXECUTE: confirm a chain exists before dispatch | Self-forming chains: contracts matched by interface; EXECUTE only when every link is covered ([program-neurons.md](./program-neurons.md)) | 📐 |
+
+For GS-EBS-Brain to read first: [measurable-architecture.md](./measurable-architecture.md)
+(vocabulary, invariants, metrics with formulas and baselines, hypotheses, SQL).
 
 ## What carries over
 
@@ -29,6 +33,7 @@ EBS-Brain code.
 
 ## Open questions for EBS-Brain
 
-- How credit is assigned when several rounds (or models) contribute to one passing step.
+- How credit is assigned when several rounds (or models) contribute to one passing step
+  (a first answer: [credit-and-promotion.md](./credit-and-promotion.md)).
 - Whether chains are reused as prompts, as fine-tuning data, or both.
 - How a decomposition (planner output) is itself verified before execution.

@@ -32,7 +32,8 @@ Names follow GS-EBS-Brain's learning system so the store can move there unchange
 ```
 tasks          id, name (game), spec_hash, parent_id, depth, origin (hand), created   -- tree columns for task-tree.md
 steps          id, task_id, ord, name (e.g. 02-hit), test_hash                         -- changed test = new row
-runs           id, task_id, model, started, finished, rounds_limit, result, steps_passed, steps_total
+runs           id, task_id, model, mode (tdd | NULL = before v2), temperature, started, finished,
+               rounds_limit, result, steps_passed, steps_total
 attempts       id, run_id, step_id, round (0 = check before agent), started, duration_ms, agent_exit,
                result (PASS|FAIL), tests_passed, tests_total
 events         id, attempt_id, seq, agent_step, tool, path, outcome (ok|error|denied|rejected), kind,
@@ -68,7 +69,8 @@ SELECT signature, COUNT(*) FROM chains GROUP BY signature ORDER BY 2 DESC;
 1. The agent writes one JSON line per step to `AGENT_EVENTS`
    (`data/events/attempt-<id>.jsonl`, write-protected); it has no database code.
 2. The runner owns the database (`dev/testing/knowledge-db.mjs`): schema (versioned with
-   `PRAGMA user_version`), tasks/steps (a changed test is a new step row), runs, attempts
+   `PRAGMA user_version`, now 2; version 1 is migrated in place, adding `runs.mode` and
+   `runs.temperature`), tasks/steps (a changed test is a new step row), runs, attempts
    (round 0 = check before any agent round), verifications with parsed test counts, events;
    `chains` and `credit` are derived for each passing attempt. Snapshot after every run.
 3. `node dev/testing/report.mjs` prints furthest step, rounds needed, failure kinds,
@@ -77,5 +79,10 @@ SELECT signature, COUNT(*) FROM chains GROUP BY signature ORDER BY 2 DESC;
 
 Not yet built: reuse of chains as examples, and the task-tree columns in use
 (`parent_id`, `depth`, `origin` exist but are always root/0/`hand`).
+
+Planned 📐 ([program-neurons.md](./program-neurons.md), [credit-and-promotion.md](./credit-and-promotion.md)):
+`neurons` (program + contract + level + reputation), `rewards` (step, chain, penalty,
+decomposer), and renaming `chains` to `tool_sequences` so that "chain" means a chain of
+tasks. Metrics and baselines: [measurable-architecture.md](./measurable-architecture.md).
 
 Node prints an `ExperimentalWarning` for `node:sqlite`; this is expected.

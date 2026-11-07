@@ -15,9 +15,12 @@ Status markers used in these documents: ✅ implemented · 🧪 implemented, not
 3. [tdd-runner.md](./tdd-runner.md): sample games built test-first, in steps and rounds
 4. [knowledge-db.md](./knowledge-db.md): ✅ recording success chains and failure points
 5. [task-tree.md](./task-tree.md): 📐 recursive decomposition into atomic tasks and chains
-6. [controller.md](./controller.md): the Copilot planning prototype (`src/`)
-7. [decisions.md](./decisions.md): decisions so far, and why
-8. [ebs-brain-alignment.md](./ebs-brain-alignment.md): how this maps to GS-EBS-Brain
+6. [program-neurons.md](./program-neurons.md): 📐 programs instead of LLM calls (learn once, execute fast)
+7. [credit-and-promotion.md](./credit-and-promotion.md): 📐 step and chain rewards, blame, reputation, levels
+8. [measurable-architecture.md](./measurable-architecture.md): **for GS-EBS-Brain**: vocabulary, invariants, metrics with baselines, hypotheses
+9. [controller.md](./controller.md): the Copilot planning prototype (`src/`)
+10. [decisions.md](./decisions.md): decisions so far, and why
+11. [ebs-brain-alignment.md](./ebs-brain-alignment.md): how this maps to GS-EBS-Brain
 
 ## Components
 
@@ -43,7 +46,9 @@ Status markers used in these documents: ✅ implemented · 🧪 implemented, not
 | Specs | `dev/testing/specs/<game>/` | ✅ | Scaffold with starter (`game/`), ordered step tests (`steps/`), `task.txt`, `verify.txt`, `target.txt` |
 | Generated games | `dist/games/<game>/` | ✅ | Output; git-ignored, rebuilt on every run |
 | Knowledge DB | `data/knowledge.db`, `dev/testing/knowledge-db.mjs`, `report.mjs` | ✅ | Runs, attempts, tool events, verifications, success chains, credit; snapshots |
-| Task tree | (runner extension) | 📐 | Recursive decomposition; every node tested, leaves run as chains |
+| Task tree | (runner extension) | 📐 | Recursive decomposition; every node tested, leaves run as chains (first hand-made trial: hangman step 2) |
+| Program neurons | (knowledge DB + runner) | 📐 | Verified programs stored per contract and executed without the LLM |
+| Credit and promotion | (knowledge DB) | 📐 | Small step rewards, large chain rewards split by importance, blame, reputation, levels |
 | Copilot controller | `src/` | 🧪 | Copilot proposes 1–3 steps after `SEND`; Ollama drafts text after `RUN` |
 | Acceptance tests | `dev/testing/acceptance/` | ✅ | Outer layer: real runner and agent against a fake loopback model, temporary DB (`npm test`) |
 | Unit tests | `dev/testing/unit/` | ✅ | Inner layer: mocked controller tests, knowledge-DB tests (`npm test`) |

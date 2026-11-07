@@ -13,7 +13,8 @@ dev/testing/specs/<game>/          tracked
 └── steps/                         ordered step tests: 01-….test.mjs / 01-….spec.mjs
 ```
 
-Current specs: `guess-game` (5 steps), `hangman` (6), `tictactoe` (4, React + Vite + Playwright).
+Current specs: `guess-game` (5 steps), `hangman` (6 steps, step 2 split into 4 files, so 9
+step files), `tictactoe` (4, React + Vite + Playwright).
 Each spec was checked against a reference implementation before use.
 
 ## Run (`node dev/testing/run-sample.mjs <game>`)
@@ -66,8 +67,19 @@ Before step 2 (broad tools, no starter files, default temperature):
 | hangman | step 1 ❌ | not run |
 | tictactoe | step 1 ❌ | not run |
 
-No real-model run with TDD mode yet. New runs are recorded in the knowledge DB
-(`node dev/testing/report.mjs`).
+With TDD mode (atomic tools, starter files, context in the task, temperature 0.2;
+3 rounds per step; knowledge-DB runs 5–10):
+
+| Game | `qwen2.5-coder:3b` | `qwen3.5:4b` |
+| --- | --- | --- |
+| guess-game | 1/5 (step 1 in round 2) | **5/5** (steps 1–4 each in round 1; step 5 already passed), 10 min |
+| hangman | 0/6 | 1/6; step 2 failed 3 rounds on one logic error (game-over line only printed in some cases), 98 min |
+| tictactoe | 0/4 | **4/4** (step 3 in round 2; step 4 already passed), 25 min |
+
+Most common failures: 3B `replace-no-match` (28, cannot copy the exact text), `bad-json` (3);
+4B only `replace-ambiguous` (1) and step limits (2). Typical success chain:
+`replace_in_file→run_tests→final` (6 of 9). The 4B model is slow on Hydra (partial CPU
+offload plus thinking): 11–35 min per round on hangman. Details: `node dev/testing/report.mjs`.
 
 Typical 3B failures: placeholder code, CommonJS in an ES-module package, `async` or
 `console.log` instead of returning lines, markdown fences, writing to the wrong file, bare
@@ -81,7 +93,34 @@ JSX without a component, attempts to edit protected test files (blocked).
   `--- name ---` lines, not fences) plus the latest test output.
 - Temperature 0.2 (`SAMPLE_TEMPERATURE` to override).
 
+## First hand-made task tree: hangman step 2 🧪
+
+Both models stalled on hangman `02-hit`. It is split by hand into leaves that run first and a
+parent that is checked again afterwards (the parent's own test decides, [task-tree.md](./task-tree.md)):
+
+| File | Role | Checks |
+| --- | --- | --- |
+| `02a-ends-with-reveal` | leaf | last line is `Game over. The word was …` (the 4B model's one logic error) |
+| `02b-hit-line` | leaf | the `Yes! Word: …` line for a correct letter |
+| `02c-double-letter` | leaf | a letter that occurs twice is revealed in both places |
+| `02d-hit` | parent | the original step-2 test, unchanged |
+
+Validated before use: the reference implementation passes all 11 tests; on the code where the
+4B model was stuck, only `02a` fails among the leaves (it isolates the error) and `02d` still
+fails.
+
+**Result (run 11, `qwen3.5:4b`, 2026-11-07): partly.** The split unblocked the error it
+isolated: `02a` passed in round 2 (19 min), where the unsplit step had failed all 3 rounds.
+The next leaf, `02b`, then failed all 3 rounds (64 min). Its test did pass, but each time the
+edit **broke `02a` again** (the hit branch now ends with a `Yes!` line instead of the reveal),
+and the code was fitted to the tests (`input === word[0]`). So the split solved the first
+problem; the remaining failure is a regression, which the planned level-2 automation
+(undo edits that break earlier tests, [program-neurons.md](./program-neurons.md)) targets.
+Hypothesis H2 in [measurable-architecture.md](./measurable-architecture.md).
+The runner has no tree support yet: the order comes from file names (`02a` … `02d`).
+
 ## Planned 📐
 
-- Micro-steps (one assertion per step) if models still stall.
+- Tree support in the runner (parent/child in the knowledge DB, automatic parent re-check).
+- More micro-steps (one assertion per step) where models still stall.
 - A planner (cloud AI or larger local model) that writes and validates new step tests.

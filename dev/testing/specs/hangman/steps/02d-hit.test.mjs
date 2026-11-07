@@ -1,4 +1,4 @@
-// Top-down TDD step 2 of 6 for hangman. Earlier steps' tests stay in test/ and must keep passing.
+// Top-down TDD step 2d of hangman: parent of 02a-02c (the original step 2). Its own test decides.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { play } from "../src/hangman.mjs";

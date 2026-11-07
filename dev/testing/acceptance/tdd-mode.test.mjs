@@ -79,6 +79,8 @@ test("a model that edits the starter with replace_in_file passes, and the chain 
     const db = openDb(dataDir);
     assert.deepEqual(all(db, "SELECT model, result, steps_passed FROM runs"), [{ model: MODEL, result: "PASS", steps_passed: 5 }]);
     assert.deepEqual(all(db, "SELECT signature FROM chains"), [{ signature: "read_source→replace_in_file→run_tests→final" }]);
+    // Runs record how they were configured, so TDD-mode runs can be told apart from others.
+    assert.deepEqual(all(db, "SELECT mode, temperature FROM runs"), [{ mode: "tdd", temperature: 0.2 }]);
     db.close();
   } finally {
     rmSync(dataDir, { recursive: true, force: true });

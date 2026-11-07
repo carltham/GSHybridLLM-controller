@@ -86,7 +86,8 @@ root with origin `hand`.
 - **Where splitting helped:** parent failed, then passed after its children did.
 - **Where splitting did not help:** children passed, parent still failed. The
   decomposition missed something; this is EBS-Brain's open question of how to verify a
-  decomposition.
+  decomposition. The decomposer takes the blame, not the children
+  ([credit-and-promotion.md](./credit-and-promotion.md)).
 - **Depth needed per model:** e.g. depth 3 for a 4B model versus depth 1 for a larger model.
   A direct measure of model ability.
 

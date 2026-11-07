@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tasks (
@@ -36,7 +36,9 @@ CREATE TABLE IF NOT EXISTS runs (
   rounds_limit INTEGER NOT NULL,
   result TEXT,
   steps_passed INTEGER NOT NULL DEFAULT 0,
-  steps_total INTEGER NOT NULL
+  steps_total INTEGER NOT NULL,
+  mode TEXT,
+  temperature REAL
 );
 CREATE TABLE IF NOT EXISTS attempts (
   id INTEGER PRIMARY KEY,
@@ -116,6 +118,8 @@ export function openKnowledgeDb(file) {
   db.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;");
   const version = db.prepare("PRAGMA user_version").get().user_version;
   if (version > SCHEMA_VERSION) throw new Error(`Knowledge DB schema ${version} is newer than this code (${SCHEMA_VERSION}).`);
+  // Version 1 → 2: runs record mode and temperature; older runs keep NULL (unknown).
+  if (version === 1) db.exec("ALTER TABLE runs ADD COLUMN mode TEXT; ALTER TABLE runs ADD COLUMN temperature REAL;");
   db.exec(SCHEMA);
   db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 
@@ -144,10 +148,10 @@ export function openKnowledgeDb(file) {
       return run("INSERT INTO steps (task_id, ord, name, test_hash) VALUES (?, ?, ?, ?)", taskId, ord, name, testHash);
     },
 
-    startRun({ taskId, model, roundsLimit, stepsTotal }) {
+    startRun({ taskId, model, roundsLimit, stepsTotal, mode = null, temperature = null }) {
       return run(
-        "INSERT INTO runs (task_id, model, started, rounds_limit, steps_total) VALUES (?, ?, ?, ?, ?)",
-        taskId, model, now(), roundsLimit, stepsTotal,
+        "INSERT INTO runs (task_id, model, started, rounds_limit, steps_total, mode, temperature) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        taskId, model, now(), roundsLimit, stepsTotal, mode, temperature,
       );
     },
 

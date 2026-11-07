@@ -50,8 +50,12 @@ npm audit
 The user wants Ollama to be a local tool for whichever cloud AI is in use, with
 no Copilot dependency. The agent has file read/write and command execution:
 writes and commands need approval; commands are allow-listed by exact string in
-`.ollama/allowlist.json`; paths are confined to the project root. Do not weaken
-these checks. The invariants below describe `src/` (the Copilot controller) only.
+`.ollama/allowlist.json`; paths are confined to the project root. The model can
+never write `scripts/agent.mjs`, `.ollama/`, `data/`, `dev/testing/` or paths in
+`AGENT_READONLY`. With `AGENT_VERIFY` a final answer counts only once that command
+passes. TDD mode (`AGENT_TARGET` + `AGENT_TESTS`) offers only atomic tools bound to one
+source file. Do not weaken these checks. Details: `dev/architecture/local-agent.md`.
+The invariants below describe `src/` (the Copilot controller) only.
 
 ## Invariants to preserve
 
@@ -77,8 +81,11 @@ these checks. The invariants below describe `src/` (the Copilot controller) only
 
 ## Known gaps
 
-Live Copilot authentication, cloud planning, and live Ollama inference are
-untested; only mocks, build, and CLI help are validated.
+Copilot controller (`src/`): live Copilot authentication, cloud planning and live
+Ollama inference are untested; only mocks, build and CLI help are validated.
+Local agent: run live in TDD mode with `qwen2.5-coder:3b` and `qwen3.5:4b` (runs 5–11;
+results in `dev/architecture/measurable-architecture.md`). Only the guess-game starter is
+checked by an acceptance test; the hangman and tictactoe starters are not.
 
 ## Local environment (Hydra)
 
@@ -102,8 +109,9 @@ creator. Spec layout: `dev/testing/specs/<name>/{task.txt,verify.txt,target.txt,
 `game/`, runs `npm ci` if there is a lockfile, then adds one step test at a time (earlier
 ones stay). Each failing step gets up to `SAMPLE_ROUNDS` (default 3) fresh agent runs of
 12 steps, each given the current test output. Summary and agent logs: `logs/sample-<name>.log`.
-The model cannot write `dev/testing/`, `test/`, or anything copied from the scaffold except
-`src/` (`AGENT_READONLY`). `AGENT_VERIFY` (= `verify.txt`, must be allow-listed) must exit 0
+Besides the agent's fixed protections, the model cannot write the game's `test/` or anything
+copied from the scaffold except `src/` (`AGENT_READONLY`); in TDD mode it can only change
+the one target file. `AGENT_VERIFY` (= `verify.txt`, must be allow-listed) must exit 0
 before a final answer is accepted. `AGENT_ANSWERS=<file>` gives pre-written approvals
 (`write: y`, `run: n`; missing → no). Runs are recorded in `data/knowledge.db` (SQLite,
 git-ignored, never exported to GitHub, snapshots in `data/backups/`); `node

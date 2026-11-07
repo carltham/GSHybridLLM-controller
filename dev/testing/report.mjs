@@ -18,10 +18,10 @@ const table = (title, rows) => {
 };
 
 table("Furthest step per model and task", db.prepare(`
-  SELECT r.model, t.name AS task, MAX(r.steps_passed) AS best_steps, MAX(r.steps_total) AS steps,
-         COUNT(*) AS runs
+  SELECT r.model, COALESCE(r.mode, '?') AS mode, t.name AS task, MAX(r.steps_passed) AS best_steps,
+         MAX(r.steps_total) AS steps, COUNT(*) AS runs
   FROM runs r JOIN tasks t ON t.id = r.task_id
-  GROUP BY r.model, t.name ORDER BY t.name, best_steps DESC`).all());
+  GROUP BY r.model, r.mode, t.name ORDER BY t.name, best_steps DESC`).all());
 
 table("Rounds needed per step (credit)", db.prepare(`
   SELECT c.model, t.name AS task, s.name AS step, MIN(c.attempts_to_pass) AS best_round, COUNT(*) AS times_solved
@@ -38,7 +38,8 @@ table("Success chains", db.prepare(`
   SELECT ch.signature, COUNT(*) AS count FROM chains ch GROUP BY ch.signature ORDER BY count DESC LIMIT 15`).all());
 
 table("Recent runs", db.prepare(`
-  SELECT r.id, r.model, t.name AS task, r.started, COALESCE(r.result, 'ABORTED') AS result,
+  SELECT r.id, r.model, COALESCE(r.mode, '?') AS mode, r.temperature, t.name AS task, r.started,
+         COALESCE(r.result, 'ABORTED') AS result,
          r.steps_passed || '/' || r.steps_total AS steps
   FROM runs r JOIN tasks t ON t.id = r.task_id ORDER BY r.id DESC LIMIT 10`).all());
 

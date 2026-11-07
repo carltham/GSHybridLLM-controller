@@ -71,7 +71,9 @@ const kb = openKnowledgeDb(join(dataDir, "knowledge.db"));
 const taskId = kb.upsertTask(name, sha256(`${baseTask}\n${verify}`));
 const stepIds = steps.map((step, index) => kb.upsertStep(taskId, index + 1, step.replace(/\.(test|spec)\.mjs$/, ""),
   sha256(readFileSync(join(stepsDir, step), "utf8"))));
-const runId = kb.startRun({ taskId, model, roundsLimit: rounds, stepsTotal: steps.length });
+const runId = kb.startRun({
+  taskId, model, roundsLimit: rounds, stepsTotal: steps.length, mode: "tdd", temperature: Number(temperature),
+});
 report(`Run ${runId}: ${outRel} with ${model}, ${steps.length} steps, up to ${rounds} rounds each`);
 
 const readonly = new Set([...readdirSync(scaffold), "test"].filter((entry) => entry !== "src"));

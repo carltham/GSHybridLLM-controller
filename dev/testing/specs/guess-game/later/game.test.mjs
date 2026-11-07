@@ -1,5 +1,5 @@
-// Inner-layer unit tests (top-down TDD step 2). Not part of the scaffold yet.
-// Inner layer for a later top-down TDD step: copy to game/test/ once play() passes (import ../src/game.mjs).
+// Inner-layer unit tests for guess-game, kept for a later top-down TDD layer. Not used yet.
+// Once play() passes all steps, add these as a new step in ../steps/ (they import ../src/game.mjs).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkGuess, createGame } from "../src/game.mjs";

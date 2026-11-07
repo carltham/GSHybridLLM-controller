@@ -43,3 +43,14 @@ Short records of decisions taken, newest last. Each: decision, reason, consequen
     file, starting from a starter with the right shape, and runs only the gate command. The task
     carries the current source and step test; temperature 0.2. Acceptance tests run serially
     because they share `dist/games/guess-game/`.
+17. **Program neurons.** The LLM creates a program once; verified programs are stored per
+    contract and executed without the LLM (learn once, execute fast; measured ratio ≈ 3 × 10⁸).
+    See [program-neurons.md](./program-neurons.md).
+18. **Two-level rewards.** Step success earns a small reward; only full chain success (root test)
+    earns the large chain reward, split by importance (difficulty × scarcity × cost). Failing
+    chains blame the first failing link, or the decomposer when all links pass but the root fails.
+    See [credit-and-promotion.md](./credit-and-promotion.md).
+19. **Measurable contract with GS-EBS-Brain.** Every claim has a metric with formula, source and
+    baseline; EBS-Brain reads all files here locally, the knowledge DB read-only. "Chain" means a chain of
+    tasks; the per-attempt tool sequence table will be renamed `tool_sequences`. See
+    [measurable-architecture.md](./measurable-architecture.md).

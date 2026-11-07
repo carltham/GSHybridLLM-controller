@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { openKnowledgeDb, parseTestCounts } from "../knowledge-db.mjs";
 
 test("parses node:test and Playwright counts", () => {
@@ -64,6 +65,36 @@ test("snapshots are consistent copies and only the newest are kept", () => {
     const kept = readdirSync(join(dir, "backups")).filter((f) => f.endsWith(".db"));
     assert.equal(kept.length, 2);
     assert.ok(!kept.includes("knowledge-2000-01-01T00-00-00.db"));
+    kb.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("runs store mode and temperature", () => {
+  const kb = openKnowledgeDb(":memory:");
+  const task = kb.upsertTask("t", "h");
+  const run = kb.startRun({ taskId: task, model: "m", roundsLimit: 1, stepsTotal: 1, mode: "tdd", temperature: 0.2 });
+  assert.deepEqual({ ...kb.db.prepare("SELECT mode, temperature FROM runs WHERE id = ?").get(run) }, { mode: "tdd", temperature: 0.2 });
+  kb.close();
+});
+
+test("a version-1 database is migrated; its old runs keep an unknown mode", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kb-"));
+  try {
+    const file = join(dir, "knowledge.db");
+    const v1 = new DatabaseSync(file);
+    v1.exec(`CREATE TABLE tasks (id INTEGER PRIMARY KEY, name TEXT NOT NULL, spec_hash TEXT, parent_id INTEGER,
+               depth INTEGER NOT NULL DEFAULT 0, origin TEXT NOT NULL DEFAULT 'hand', created TEXT NOT NULL, UNIQUE (name, parent_id));
+             CREATE TABLE runs (id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL, model TEXT NOT NULL, started TEXT NOT NULL,
+               finished TEXT, rounds_limit INTEGER NOT NULL, result TEXT, steps_passed INTEGER NOT NULL DEFAULT 0, steps_total INTEGER NOT NULL);
+             INSERT INTO tasks (name, created) VALUES ('t', 'x');
+             INSERT INTO runs (task_id, model, started, rounds_limit, steps_total) VALUES (1, 'old', 'x', 3, 5);
+             PRAGMA user_version = 1;`);
+    v1.close();
+    const kb = openKnowledgeDb(file);
+    assert.deepEqual({ ...kb.db.prepare("SELECT model, mode, temperature FROM runs").get() }, { model: "old", mode: null, temperature: null });
+    assert.equal(kb.db.prepare("PRAGMA user_version").get().user_version, 2);
     kb.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });
