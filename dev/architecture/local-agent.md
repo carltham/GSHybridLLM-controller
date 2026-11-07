@@ -45,10 +45,12 @@ A denied command is answered with the exact allowed test command when `AGENT_VER
 | `AGENT_EVENTS` | File for structured step events (JSON lines) |
 | `AGENT_TARGET`, `AGENT_TESTS` | Switch on TDD mode: the one source file and the test folder |
 | `AGENT_TEMPERATURE` | Sampling temperature 0–2 (runner default 0.2); unset = model default |
+| `AGENT_WORKDIR` | Project-relative folder the verify command runs in (the game); default the project root |
+| `AGENT_LOG` | Log file instead of `logs/terminal-output.log` (set by the runner) |
 
 ## Logs and events
 
-- `logs/terminal-output.log`: human-readable, overwritten per run.
+- `logs/terminal-output.log` (or `AGENT_LOG`): human-readable, overwritten per run.
 - `AGENT_EVENTS=<file>` ✅: one JSON line per step (`seq`, `step`, `tool`, `path`, `outcome`,
   `kind`, `ms`, `detail`) for the knowledge DB ([knowledge-db.md](./knowledge-db.md)).
   `data/` is write-protected, so the model cannot alter its own record.
@@ -67,5 +69,12 @@ and `AGENT_TESTS` (one test folder) set, and `AGENT_VERIFY` required, the agent 
 | `run_tests {}` | Runs `AGENT_VERIFY` | `run_command(any)` |
 
 The model cannot name a path or a command. Broad tools are answered as `unknown-tool`.
-New failure kinds: `replace-no-match`, `replace-ambiguous`. Writes still pass through the
-path rules and the fence check. The sample runner always uses TDD mode.
+New failure kinds: `replace-no-match`, `replace-ambiguous`, `regression`. Writes still pass
+through the path rules and the fence check. The sample runner always uses TDD mode.
+
+**Regression guard.** After every write the agent runs `AGENT_VERIFY` and compares passing
+test names (node:test TAP `ok N - name`, Playwright list `✓ N … (time)`) with those of the
+source before the write. If any passing test now fails, the previous source is restored and
+the model is told which tests broke (event `rejected`, kind `regression`). This keeps earlier
+steps green (run 11: each fix for hangman `02b` broke `02a`). Cost: one test run per write
+(two for the first write of an attempt). The Playwright pattern is not yet covered by a test.

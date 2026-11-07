@@ -1,1 +1,1 @@
-npm test --prefix dist/games/tictactoe
+npm test

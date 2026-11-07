@@ -1,1 +1,1 @@
-node --test dist/games/guess-game/test/*.test.mjs
+node --test --experimental-test-isolation=none test/*.test.mjs

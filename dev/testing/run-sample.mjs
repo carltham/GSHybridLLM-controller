@@ -1,10 +1,10 @@
 // Top-down TDD sample run, in small steps and batches of agent rounds, recorded in the
 // knowledge DB (data/knowledge.db; see dev/architecture/tdd-runner.md and knowledge-db.md).
 //
-// 1. Delete dist/games/<name>, copy the freestanding scaffold dev/testing/specs/<name>/game/
+// 1. Delete dist/games/<name> (or SAMPLE_OUT_DIR/<name>), copy the freestanding scaffold dev/testing/specs/<name>/game/
 //    there and run npm ci if it has a lockfile.
 // 2. For each test in dev/testing/specs/<name>/steps/ (sorted): add it to the game's test/
-//    folder (earlier steps stay) and run the verify command (attempt round 0). If it fails,
+//    folder (earlier steps stay) and run the verify command in the game folder (attempt round 0). If it fails,
 //    start the local agent for up to SAMPLE_ROUNDS rounds. Each round is a fresh conversation
 //    (at most 12 agent steps) that continues from the code left by the previous round and gets
 //    the current test failures in its task.
@@ -43,13 +43,19 @@ const temperature = process.env.SAMPLE_TEMPERATURE ?? "0.2";
 const steps = readdirSync(stepsDir).filter((f) => /\.(test|spec)\.mjs$/.test(f)).sort();
 if (steps.length === 0) throw new Error(`No step tests in ${stepsDir}`);
 
-const outRel = join("dist", "games", name);
+// SAMPLE_OUT_DIR (tests): project-relative folder for the games, default dist/games. Each
+// acceptance file uses its own, so files can run in parallel.
+const outBase = process.env.SAMPLE_OUT_DIR?.trim() || join("dist", "games");
+if (!/^dist\/[a-z0-9/-]+$/.test(outBase) || outBase.includes("..")) throw new Error(`SAMPLE_OUT_DIR must be under dist/: ${outBase}`);
+const outRel = join(outBase, name);
 const outDir = join(root, outRel);
 // SAMPLE_DATA_DIR (tests) puts the knowledge DB elsewhere; default data/, write-protected from the model.
 const dataDir = process.env.SAMPLE_DATA_DIR ? resolve(process.env.SAMPLE_DATA_DIR) : join(root, "data");
 const eventsDir = join(dataDir, "events");
-const runLog = join(root, "logs", `sample-${name}.log`);
-const agentLog = join(root, "logs", "terminal-output.log");
+// SAMPLE_LOG_DIR (tests): where the run and agent logs go, default logs/.
+const logDir = process.env.SAMPLE_LOG_DIR ? resolve(process.env.SAMPLE_LOG_DIR) : join(root, "logs");
+const runLog = join(logDir, `sample-${name}.log`);
+const agentLog = join(logDir, "terminal-output.log");
 mkdirSync(dirname(runLog), { recursive: true });
 mkdirSync(eventsDir, { recursive: true });
 writeFileSync(runLog, "");
@@ -80,6 +86,8 @@ const readonly = new Set([...readdirSync(scaffold), "test"].filter((entry) => en
 const agentEnv = {
   ...process.env,
   AGENT_VERIFY: verify,
+  AGENT_WORKDIR: outRel,
+  AGENT_LOG: agentLog,
   AGENT_TARGET: join(outRel, target),
   AGENT_TESTS: join(outRel, "test"),
   AGENT_TEMPERATURE: temperature,
@@ -89,7 +97,7 @@ const agentEnv = {
 // SIGTERM on timeout (not SIGKILL) so Playwright can stop the server it started.
 function runVerify() {
   const result = spawnSync("sh", ["-c", verify], {
-    cwd: root,
+    cwd: outDir,
     encoding: "utf8",
     timeout: 180000,
     killSignal: "SIGTERM",

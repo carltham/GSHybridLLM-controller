@@ -4,13 +4,14 @@
 // never to the real data/. Needs the guess-game verify command in .ollama/allowlist.json.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, rmSync, existsSync } from "node:fs";
+import { readFileSync, rmSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
   root, MODEL, call, final, startFakeOllama, assertVerifyAllowListed, runSample, openDb, all,
 } from "./fake-ollama.mjs";
 
 const game = "guess-game";
+const OUT = "dist/acceptance/sample-run";
 
 const CORRECT_GAME = `export function play(secret, inputs) {
   const out = ["Guess a number from 1 to 100."];
@@ -37,7 +38,7 @@ const CORRECT_GAME = `export function play(secret, inputs) {
 let fake;
 before(async () => {
   assertVerifyAllowListed(game);
-  fake = await startFakeOllama();
+  fake = await startFakeOllama(OUT);
 });
 after(() => fake?.close());
 
@@ -92,7 +93,7 @@ test("a model that only claims success fails, and the rejected claims are record
 });
 
 test("fenced code and attempts to write tests are refused and recorded; tests stay unchanged", async () => {
-  const testFile = `dist/games/${game}/test/01-start.test.mjs`;
+  const testFile = `${OUT}/${game}/test/01-start.test.mjs`;
   const { code, output, dataDir } = await runSample(fake, game, [
     call("write_file", { path: testFile, content: "// replaced by the model\n" }),
     call("write_source", { content: "```js\n" + CORRECT_GAME + "```\n" }),
@@ -109,6 +110,26 @@ test("fenced code and attempts to write tests are refused and recorded; tests st
       { tool: "write_source", kind: "fence" },
     ]);
     db.close();
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("each acceptance file builds games in its own folder and keeps its logs to itself", async () => {
+  // So acceptance files can run in parallel: nothing may go to the shared dist/games or logs/.
+  const shared = [join(root, "dist/games", game), join(root, "logs", `sample-${game}.log`), join(root, "logs/terminal-output.log")];
+  const stamp = () => shared.map((path) => (existsSync(path) ? statSync(path).mtimeMs : null));
+  const before = stamp();
+  const { code, output, dataDir, logDir } = await runSample(fake, game, [
+    call("write_source", { content: CORRECT_GAME }),
+    final("Implemented play."),
+  ]);
+  try {
+    assert.equal(code, 0, output);
+    assert.equal(readFileSync(join(root, OUT, game, "src/game.mjs"), "utf8"), CORRECT_GAME);
+    assert.match(readFileSync(join(logDir, `sample-${game}.log`), "utf8"), /All 5 steps pass/);
+    assert.match(readFileSync(join(logDir, "terminal-output.log"), "utf8"), /write_source/);
+    assert.deepEqual(stamp(), before, "the run touched the shared dist/games or logs/");
   } finally {
     rmSync(dataDir, { recursive: true, force: true });
   }

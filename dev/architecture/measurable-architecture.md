@@ -83,7 +83,7 @@ not copy existing text exactly.
 | ID | Hypothesis | Measure | Result / status |
 | --- | --- | --- | --- |
 | H1 | Atomic tools + starter + context + low temperature raise success | M2, M3, M4 before/after TDD mode | ✅ Confirmed for 4B: guess-game from step 3 ❌ to 5/5, tictactoe from not run to 4/4; 3B barely improved |
-| H2 | Splitting a stuck step into micro-steps unblocks it | M12; passes of hangman `02d` | 🧪 Partly: the isolated leaf `02a` passed (round 2), but `02b` failed 3 rounds because each fix broke `02a` again; `02d` not reached (run 11). Next: retry after auto-undo of regressions (H3) |
+| H2 | Splitting a stuck step into micro-steps unblocks it | M12; passes of hangman `02d` | 🧪 Partly: the isolated leaf `02a` passed (round 2), but `02b` failed 3 rounds because each fix broke `02a` again; `02d` not reached (run 11). Next: retry with the regression guard (built, not yet run live) |
 | H3 | Automating the fixed loop parts cuts turns per step by ≥ 40 % | M5, M7 before/after level-2 automation | 📐 |
 | H4 | Reusing verified programs removes the LLM from repeat work | M9, M10 | 📐 |
 | H5 | Chain-reward shares predict replacement value (high-share links matter most) | M11; ρ vs. chain success when the link is swapped | 📐 |

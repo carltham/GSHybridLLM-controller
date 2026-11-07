@@ -126,7 +126,7 @@ inference. Controller tests mock both providers and cover approval gates, task/i
 limits, local/cloud separation, disabled cloud capabilities and Ollama errors.
 Knowledge-DB unit tests use temporary SQLite files. Acceptance tests run the real sample
 runner and agent against a fake model on `127.0.0.1` with a temporary DB; they cover the
-verify gate, recorded chains and credit, refused writes and TDD mode. Tests run serially.
+verify gate, recorded chains and credit, refused writes and TDD mode. Each acceptance file has its own game folder, so test files run in parallel.
 The runtime eval plan also builds and checks CLI help without network calls.
 
 The SDK currently pins an affected Zod release. `package.json` overrides it to

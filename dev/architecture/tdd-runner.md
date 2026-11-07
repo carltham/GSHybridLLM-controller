@@ -31,11 +31,15 @@ for each step (sorted):
 all steps pass ─► exit 0
 ```
 
+- The verify command runs **inside the game folder** (`AGENT_WORKDIR`), so `verify.txt` names no
+  output path: `node --test --experimental-test-isolation=none test/*.test.mjs` (one process for
+  all test files, about half the time per run) or `npm test` (tictactoe).
 - The agent gets `AGENT_VERIFY` (= `verify.txt`), `AGENT_TARGET` (= `target.txt`) and
   `AGENT_TESTS` (= the game's `test/`), which switch on TDD mode, `AGENT_TEMPERATURE`
   (`SAMPLE_TEMPERATURE`, default 0.2), `AGENT_EVENTS` (per attempt, in `data/events/`) and
   `AGENT_READONLY` (= everything copied from the scaffold except `src/`, plus `test/`).
-- Run log: `logs/sample-<game>.log` (summary plus each round's agent log).
+- Run log: `logs/sample-<game>.log` (summary plus each round's agent log); `SAMPLE_LOG_DIR`
+  changes the folder. Games go to `dist/games/<game>` unless `SAMPLE_OUT_DIR` (under `dist/`) is set.
 - Every run is recorded in the knowledge DB (`SAMPLE_DATA_DIR`, default `data/`).
 
 ## Tests of the tooling itself ✅
@@ -46,10 +50,9 @@ temporary `SAMPLE_DATA_DIR`. It covers a correct model (all steps pass; chain an
 recorded), a model that only claims success (rejected; no credit) and refused writes (`fence`;
 a broad `write_file` to a test is `unknown-tool`; tests unchanged). `tdd-mode.test.mjs` covers TDD mode: starter file, offered tools, task context, temperature,
 `replace_in_file` success and refused broad tools. Inner layer: `dev/testing/unit/`. All part of
-`npm test`, run with `--test-concurrency=1` because the acceptance tests share
-`dist/games/guess-game/`.
-Note: the acceptance tests rebuild `dist/games/guess-game/` and overwrite
-`logs/sample-guess-game.log`.
+`npm test`. Each acceptance file builds its games in its own folder (`SAMPLE_OUT_DIR` =
+`dist/acceptance/<file>`) and writes its logs to a temporary `SAMPLE_LOG_DIR`, so the files
+run in parallel and never touch `dist/games/` or `logs/` (suite ≈ 8 s, was ≈ 17 s serially).
 
 ## UI games
 
@@ -115,7 +118,8 @@ The next leaf, `02b`, then failed all 3 rounds (64 min). Its test did pass, but 
 edit **broke `02a` again** (the hit branch now ends with a `Yes!` line instead of the reveal),
 and the code was fitted to the tests (`input === word[0]`). So the split solved the first
 problem; the remaining failure is a regression, which the planned level-2 automation
-(undo edits that break earlier tests, [program-neurons.md](./program-neurons.md)) targets.
+(undo edits that break earlier tests, [program-neurons.md](./program-neurons.md)) targets; that
+guard is now built ([local-agent.md](./local-agent.md)) and the trial is to be repeated.
 Hypothesis H2 in [measurable-architecture.md](./measurable-architecture.md).
 The runner has no tree support yet: the order comes from file names (`02a` … `02d`).
 

@@ -27,7 +27,7 @@ logic for GS-EBS-Brain (see `dev/architecture/`).
 ```bash
 npm ci               # install
 npm run build        # strict tsc build to dist/
-npm test             # build + all tests (controller, DB unit, acceptance), serially
+npm test             # build + all tests (controller, DB unit, acceptance), ≈ 8 s
 npm start -- --help  # run CLI (dist/src/cli/index.js)
 npm audit
 ```
@@ -43,6 +43,7 @@ npm audit
 - `dev/testing/acceptance/`: outer-layer tests with a fake loopback model
 - `dev/testing/specs/<name>/`: freestanding sample-game specs for the local agent
 - `data/`: knowledge DB and snapshots (git-ignored, never exported to GitHub)
+- `docs/reports/external/`: reports about this project written for readers outside it
 - `dev/architecture/`: architecture docs (start at `README.md`; ✅ implemented, 📐 planned)
 
 ## Local agent (`scripts/agent.mjs`)
@@ -54,7 +55,8 @@ writes and commands need approval; commands are allow-listed by exact string in
 never write `scripts/agent.mjs`, `.ollama/`, `data/`, `dev/testing/` or paths in
 `AGENT_READONLY`. With `AGENT_VERIFY` a final answer counts only once that command
 passes. TDD mode (`AGENT_TARGET` + `AGENT_TESTS`) offers only atomic tools bound to one
-source file. Do not weaken these checks. Details: `dev/architecture/local-agent.md`.
+source file; a write that makes a passing test fail is undone (`regression`). Do not
+weaken these checks. Details: `dev/architecture/local-agent.md`.
 The invariants below describe `src/` (the Copilot controller) only.
 
 ## Invariants to preserve
@@ -117,7 +119,9 @@ before a final answer is accepted. `AGENT_ANSWERS=<file>` gives pre-written appr
 git-ignored, never exported to GitHub, snapshots in `data/backups/`); `node
 dev/testing/report.mjs` summarizes. `npm test` also runs `dev/testing/unit/*.test.mjs` and the acceptance tests
 `dev/testing/acceptance/*.test.mjs` (fake model via `OLLAMA_PORT`, temp DB via
-`SAMPLE_DATA_DIR`), serially (`--test-concurrency=1`). Work strictly top-down TDD: failing
+`SAMPLE_DATA_DIR`), in parallel: each acceptance file has its own game folder
+(`SAMPLE_OUT_DIR=dist/acceptance/<file>`) and temp logs (`SAMPLE_LOG_DIR`); verify commands
+run inside the game folder (`AGENT_WORKDIR`), e.g. `npm test`. Work strictly top-down TDD: failing
 acceptance test first. The runner uses the agent's TDD mode: `target.txt` names the one
 source file (starter in `game/src/`); tools `read_test`, `read_source`, `replace_in_file`,
 `write_source`, `run_tests`; temperature 0.2. Writes starting with a ``` fence are rejected.

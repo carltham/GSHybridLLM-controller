@@ -11,8 +11,9 @@ import {
 } from "./fake-ollama.mjs";
 
 const game = "guess-game";
+const OUT = "dist/acceptance/tdd-mode";
 const starterPath = join(root, "dev/testing/specs", game, "game/src/game.mjs");
-const sourcePath = join(root, "dist/games", game, "src/game.mjs");
+const sourcePath = join(root, OUT, game, "src/game.mjs");
 
 const CORRECT_BODY = `  const lines = ["Guess a number from 1 to 100."];
   let guesses = 0;
@@ -37,7 +38,7 @@ const CORRECT_BODY = `  const lines = ["Guess a number from 1 to 100."];
 let fake;
 before(async () => {
   assertVerifyAllowListed(game);
-  fake = await startFakeOllama();
+  fake = await startFakeOllama(OUT);
 });
 after(() => fake?.close());
 
@@ -87,9 +88,35 @@ test("a model that edits the starter with replace_in_file passes, and the chain 
   }
 });
 
+test("an edit that makes a passing test fail is undone and recorded as a regression", async () => {
+  // Run 11: each fix for hangman 02b broke the already passing 02a. Edits must never turn a
+  // passing test red; the agent checks after every edit and restores the previous source.
+  const correct = `export function play(secret, inputs) {\n${CORRECT_BODY}}\n`;
+  const broken = correct.replace('"Guess a number from 1 to 100."', '"Guess!"');
+  const { code, output, dataDir } = await runSample(fake, game, [
+    call("write_source", { content: correct }),
+    call("write_source", { content: broken }),
+    final("Done."),
+  ]);
+  try {
+    assert.equal(code, 0, output);
+    assert.equal(readFileSync(sourcePath, "utf8"), correct, "the breaking edit was not undone");
+    const db = openDb(dataDir);
+    const writes = all(db, "SELECT outcome, kind, detail FROM events WHERE tool = 'write_source' ORDER BY id");
+    assert.equal(writes.length, 2);
+    assert.equal(writes[0].kind, null);
+    assert.deepEqual({ outcome: writes[1].outcome, kind: writes[1].kind }, { outcome: "rejected", kind: "regression" });
+    assert.match(writes[1].detail, /greets and then reveals the number/, "the broken test is not named");
+    assert.deepEqual(all(db, "SELECT result, steps_passed FROM runs"), [{ result: "PASS", steps_passed: 5 }]);
+    db.close();
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test("broad tools are refused and replace mistakes are recorded; the source stays the starter", async () => {
   const { code, output, dataDir } = await runSample(fake, game, [
-    call("write_file", { path: "dist/games/guess-game/src/game.mjs", content: "x" }),
+    call("write_file", { path: `${OUT}/${game}/src/game.mjs`, content: "x" }),
     call("run_command", { command: "echo hi" }),
     call("replace_in_file", { old: "this text is not in the file", new: "x" }),
     final("Done."),

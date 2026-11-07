@@ -88,8 +88,9 @@ LEARN(contract):                                the slow path
 
 ## Prototype plan in this project
 
-1. **Level 2 first** (runner/agent): auto-run tests after each edit, auto-undo regressions,
-   auto-finish on all-pass. Measure: turns per passing attempt, minutes per step (M5, M6 in
+1. **Level 2 first** (runner/agent): auto-run tests after each edit and auto-undo regressions
+   ✅ (regression guard, [local-agent.md](./local-agent.md)); show expected vs actual and
+   auto-finish on all-pass 📐. Measure: turns per passing attempt, minutes per step (M5, M6 in
    [measurable-architecture.md](./measurable-architecture.md)).
 2. **Level 1:** `neurons` table with stored program source per contract; the runner reuses a
    neuron whose contract matches before calling the LLM. Measure: reuse rate, time saved (M9, M10).

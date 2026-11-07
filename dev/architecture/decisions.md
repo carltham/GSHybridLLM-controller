@@ -41,8 +41,8 @@ Short records of decisions taken, newest last. Each: decision, reason, consequen
     acceptance tests were written and shown red, and only then restored and made green.
 16. **TDD mode with atomic tools is the runner's only mode.** The model edits one named source
     file, starting from a starter with the right shape, and runs only the gate command. The task
-    carries the current source and step test; temperature 0.2. Acceptance tests run serially
-    because they share `dist/games/guess-game/`.
+    carries the current source and step test; temperature 0.2. Each acceptance file uses its own
+    output folder, so the files run in parallel; the verify command runs in the game folder.
 17. **Program neurons.** The LLM creates a program once; verified programs are stored per
     contract and executed without the LLM (learn once, execute fast; measured ratio ≈ 3 × 10⁸).
     See [program-neurons.md](./program-neurons.md).
